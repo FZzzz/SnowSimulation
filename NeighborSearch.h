@@ -20,8 +20,8 @@ struct CellData
 {
 	uint* grid_hash;
 	uint* grid_index;
-	uint* cellStart;
-	uint* cellEnd;
+	uint* cell_start;
+	uint* cell_end;
 	float3* sorted_pos;
 };
 

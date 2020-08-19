@@ -54,8 +54,8 @@ void NeighborSearch::InitializeCUDA()
         cudaMalloc((void**)&m_d_sph_cell_data.grid_hash, sph_particles->m_size * sizeof(uint));
         cudaMalloc((void**)&m_d_sph_cell_data.grid_index, sph_particles->m_size * sizeof(uint));
 
-        cudaMalloc((void**)&m_d_sph_cell_data.cellStart, m_num_grid_cells * sizeof(uint));
-        cudaMalloc((void**)&m_d_sph_cell_data.cellEnd, m_num_grid_cells * sizeof(uint));
+        cudaMalloc((void**)&m_d_sph_cell_data.cell_start, m_num_grid_cells * sizeof(uint));
+        cudaMalloc((void**)&m_d_sph_cell_data.cell_end, m_num_grid_cells * sizeof(uint));
 
         cudaMalloc((void**)&m_d_sph_cell_data.sorted_pos, sph_particles->m_size * sizeof(float3));
     }
@@ -66,8 +66,8 @@ void NeighborSearch::InitializeCUDA()
         cudaMalloc((void**)&m_d_boundary_cell_data.grid_hash, boundary_particles->m_size * sizeof(uint));
         cudaMalloc((void**)&m_d_boundary_cell_data.grid_index, boundary_particles->m_size * sizeof(uint));
 
-        cudaMalloc((void**)&m_d_boundary_cell_data.cellStart, m_num_grid_cells * sizeof(uint));
-        cudaMalloc((void**)&m_d_boundary_cell_data.cellEnd, m_num_grid_cells * sizeof(uint));
+        cudaMalloc((void**)&m_d_boundary_cell_data.cell_start, m_num_grid_cells * sizeof(uint));
+        cudaMalloc((void**)&m_d_boundary_cell_data.cell_end, m_num_grid_cells * sizeof(uint));
 
         cudaMalloc((void**)&m_d_boundary_cell_data.sorted_pos, boundary_particles->m_size * sizeof(float3));
     }
@@ -82,16 +82,16 @@ void NeighborSearch::Release()
     {
         cudaFree(m_d_sph_cell_data.grid_hash);
         cudaFree(m_d_sph_cell_data.grid_index);
-        cudaFree(m_d_sph_cell_data.cellStart);
-        cudaFree(m_d_sph_cell_data.cellEnd);
+        cudaFree(m_d_sph_cell_data.cell_start);
+        cudaFree(m_d_sph_cell_data.cell_end);
         cudaFree(m_d_sph_cell_data.sorted_pos);
     }
     if (boundary_particles != nullptr)
     {
         cudaFree(m_d_boundary_cell_data.grid_hash);
         cudaFree(m_d_boundary_cell_data.grid_index);
-        cudaFree(m_d_boundary_cell_data.cellStart);
-        cudaFree(m_d_boundary_cell_data.cellEnd);
+        cudaFree(m_d_boundary_cell_data.cell_start);
+        cudaFree(m_d_boundary_cell_data.cell_end);
         cudaFree(m_d_boundary_cell_data.sorted_pos);
     }
 

@@ -29,8 +29,8 @@ Simulation::Simulation(SimWorldDesc desc)
 	{
 		cudaFree(m_d_boundary_cell_data.grid_hash);
 		cudaFree(m_d_boundary_cell_data.grid_index);
-		cudaFree(m_d_boundary_cell_data.cellStart);
-		cudaFree(m_d_boundary_cell_data.cellEnd);
+		cudaFree(m_d_boundary_cell_data.cell_start);
+		cudaFree(m_d_boundary_cell_data.cell_end);
 		cudaFree(m_d_boundary_cell_data.sorted_pos);
 	}
 }
