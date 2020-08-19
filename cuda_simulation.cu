@@ -474,7 +474,7 @@ void integrate_pbd_d(
 	t_vel = t_vel * params.global_damping;
 	float3 t_pos = pos[index] + dt * t_vel;
 	
-	
+	/*
 	if (t_pos.x >= 1.0f)
 	{
 		t_pos.x = 1.f;
@@ -502,7 +502,7 @@ void integrate_pbd_d(
 		t_vel.z = abs(t_vel.z);
 		t_vel *= params.boundary_damping;
 	}
-	
+	*/
 	if (t_pos.y <= 0.f)
 	{
 		t_pos.y = 0.f;
@@ -1529,9 +1529,12 @@ void setParams(SimParams* param_in)
 
 /* Integration for Position based Dynamics */
 void integratePBD(
+	ParticleSet* particles,
+	/*
 	float3* pos, float3* vel,  
 	float3* force, float* massInv,
 	float3* predict_pos, float3* new_pos,
+	*/
 	float deltaTime,
 	uint numParticles
 )
@@ -1540,8 +1543,12 @@ void integratePBD(
 	compute_grid_size(numParticles, MAX_THREAD_NUM, numBlocks, numThreads);
 
 	integrate_pbd_d << <numBlocks, numThreads >> > (
-		pos, vel, force, massInv,
-		predict_pos, new_pos,
+		particles->m_d_positions,
+		particles->m_d_velocity,
+		particles->m_d_force,
+		particles->m_d_massInv, 
+		particles->m_d_predict_positions, 
+		particles->m_d_new_positions,
 		deltaTime,
 		numParticles
 		);
@@ -2222,4 +2229,12 @@ void solve_pbd_dem(
 		dt
 		);
 	getLastCudaError("Kernel execution failed: finalize_correction ");
+}
+
+void solve_dem_sph(ParticleSet* dem_particles, ParticleSet* sph_particles, CellData sph_cell_data, CellData dem_cell_data, uint num_dem_particles, uint num_sph_particles, float dt)
+{
+}
+
+void solve_sph_dem(ParticleSet* sph_particles, ParticleSet* dem_particles, CellData sph_cell_data, CellData dem_cell_data, uint num_sph_particles, uint num_dem_particles, float dt)
+{
 }

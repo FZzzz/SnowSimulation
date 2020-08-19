@@ -145,7 +145,7 @@ bool Simulation::StepCUDA(float dt)
 	if (m_pause)
 		return true;
 	
-	int iterations = 3;
+	int iterations = 10;
 
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 
@@ -173,9 +173,7 @@ bool Simulation::StepCUDA(float dt)
 	
 	t1 = std::chrono::high_resolution_clock::now();
 	integratePBD(
-		particles->m_d_positions, particles->m_d_velocity,
-		particles->m_d_force, particles->m_d_massInv,
-		particles->m_d_predict_positions, particles->m_d_new_positions,
+		particles,
 		dt,
 		numParticles
 		);
@@ -199,7 +197,7 @@ bool Simulation::StepCUDA(float dt)
 		m_neighbor_searcher->m_num_grid_cells
 	);
 	t3 = std::chrono::high_resolution_clock::now();
-	/*
+	
 	solve_pbd_dem(
 		particles,
 		boundary_particles,
@@ -210,8 +208,8 @@ bool Simulation::StepCUDA(float dt)
 		dt,
 		iterations
 	);
-	*/
 	
+	/*
 	solve_sph_fluid(
 		m_d_rest_density,
 		particles,
@@ -223,7 +221,7 @@ bool Simulation::StepCUDA(float dt)
 		dt,
 		iterations
 	);
-	
+	*/
 	
 	t4 = std::chrono::high_resolution_clock::now();
 
@@ -243,7 +241,7 @@ bool Simulation::StepCUDA(float dt)
 	static int count = 0;
 	if(!m_pause) count++;
 	/*
-	if (count == 1000)
+	if (count == 2000)
 		m_pause = true, count = 0;
 	*/
 	return true;
@@ -347,7 +345,7 @@ void Simulation::SetupSimParams()
 	
 	// ice friction at -12 C
 	m_sim_params->static_friction = 1.0f;
-	m_sim_params->kinematic_friction = 0.75f;
+	m_sim_params->kinematic_friction = 0.15f;
 
 	m_particle_system->setParticleRadius(particle_radius);
 	setParams(m_sim_params);
@@ -401,7 +399,7 @@ void Simulation::InitializeBoundaryParticles()
 			}
 		}
 	}
-
+	
 	left_margin -= diameter;
 	right_margin += diameter;
 	
@@ -482,7 +480,6 @@ void Simulation::InitializeBoundaryParticles()
 			}
 		}
 	}
-	
 
 	std::cout << "Boundary particles: " << idx << std::endl;
 	particles->ResetPositions(positions, m_particle_mass);
