@@ -345,7 +345,7 @@ void Simulation::SetupSimParams()
 	
 	// ice friction at -12 C
 	m_sim_params->static_friction = 1.0f;
-	m_sim_params->kinematic_friction = 0.15f;
+	m_sim_params->kinematic_friction = 0.75f;
 
 	m_particle_system->setParticleRadius(particle_radius);
 	setParams(m_sim_params);

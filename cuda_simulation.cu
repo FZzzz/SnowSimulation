@@ -1929,7 +1929,7 @@ void compute_distance_correction(
 		}
 	}
 
-	correction[original_index] = corr;
+	correction[original_index] += corr;
 }
 
 __device__
@@ -2195,29 +2195,30 @@ void solve_pbd_dem(
 			);
 		getLastCudaError("Kernel execution failed: apply_correction ");
 		
+		compute_friction_correction << <numBlocks, numThreads >> > (
+			dem_particles->m_d_correction,
+			dem_particles->m_d_new_positions,
+			dem_particles->m_d_positions,
+			dem_particles->m_d_massInv,
+			boundary_particles->m_d_massInv,
+			cell_data,
+			b_cell_data,
+			numParticles
+			);
+
+		getLastCudaError("Kernel execution failed: compute_friction_correction ");
+		apply_correction << <numBlocks, numThreads >> > (
+			dem_particles->m_d_new_positions,
+			dem_particles->m_d_predict_positions,
+			dem_particles->m_d_correction,
+			cell_data,
+			numParticles
+			);
+		getLastCudaError("Kernel execution failed: apply_correction ");
 		
 	}
 
-	compute_friction_correction << <numBlocks, numThreads >> > (
-		dem_particles->m_d_correction,
-		dem_particles->m_d_new_positions,
-		dem_particles->m_d_positions,
-		dem_particles->m_d_massInv,
-		boundary_particles->m_d_massInv,
-		cell_data,
-		b_cell_data,
-		numParticles
-		);
 
-	getLastCudaError("Kernel execution failed: compute_friction_correction ");
-	apply_correction << <numBlocks, numThreads >> > (
-		dem_particles->m_d_new_positions,
-		dem_particles->m_d_predict_positions,
-		dem_particles->m_d_correction,
-		cell_data,
-		numParticles
-		);
-	getLastCudaError("Kernel execution failed: apply_correction ");
 		
 	// finalize correction
 	finalize_correction << <numBlocks, numThreads >> > (
@@ -2231,10 +2232,93 @@ void solve_pbd_dem(
 	getLastCudaError("Kernel execution failed: finalize_correction ");
 }
 
-void solve_dem_sph(ParticleSet* dem_particles, ParticleSet* sph_particles, CellData sph_cell_data, CellData dem_cell_data, uint num_dem_particles, uint num_sph_particles, float dt)
+/* 
+ * Compute corrections of DEM particles contributed by SPH particles 
+ * Treat DEM particles as SPH particles
+ */
+void solve_dem_sph(
+	ParticleSet* dem_particles, 
+	ParticleSet* sph_particles, 
+	CellData sph_cell_data, 
+	CellData dem_cell_data, 
+	uint num_dem_particles, 
+	uint num_sph_particles, 
+	float dt
+)
 {
+	uint numThreads, numBlocks;
+	compute_grid_size(num_dem_particles, MAX_THREAD_NUM, numBlocks, numThreads);
 }
 
-void solve_sph_dem(ParticleSet* sph_particles, ParticleSet* dem_particles, CellData sph_cell_data, CellData dem_cell_data, uint num_sph_particles, uint num_dem_particles, float dt)
+__global__
+void compute_sph_dem_distance_correction(
+	float3* correction,		// output: corrected pos
+	float* invMass,		// input: mass
+	float* dem_invMass,
+	CellData	sph_cell_data,		// input: cell data of dem particles
+	CellData	dem_cell_data,
+	uint		numParticles	// input: number of sph particles
+	)
 {
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= numParticles) return;
+
+	uint original_index = sph_cell_data.grid_index[index];
+
+	// read particle data from sorted arrays
+	float3 pos = sph_cell_data.sorted_pos[index];
+	float w0 = invMass[original_index];
+	// get address in grid
+	int3 gridPos = calcGridPos(pos);
+
+	float3 corr = make_float3(0, 0, 0);
+
+	for (int z = -1; z <= 1; z++)
+	{
+		for (int y = -1; y <= 1; y++)
+		{
+			for (int x = -1; x <= 1; x++)
+			{
+				int3 neighbor_pos = gridPos + make_int3(x, y, z);
+				corr += pbd_distance_correction_boundary(
+					neighbor_pos, index,
+					pos, w0,
+					dem_invMass,
+					dem_cell_data
+					);
+			}
+		}
+	}
+
+	correction[original_index] += corr;
+}
+
+/*
+ * Compute corrections of SPH particles contributed by DEM particles
+ * Treat SPH particles as DEM particles
+ */
+void solve_sph_dem(
+	ParticleSet* sph_particles, 
+	ParticleSet* dem_particles, 
+	CellData sph_cell_data, 
+	CellData dem_cell_data, 
+	uint num_sph_particles, 
+	uint num_dem_particles, 
+	float dt
+)
+{
+	uint numThreads, numBlocks;
+	compute_grid_size(num_sph_particles, MAX_THREAD_NUM, numBlocks, numThreads);
+	
+	compute_sph_dem_distance_correction << <numBlocks, numThreads >> > (
+		sph_particles->m_d_correction,
+		sph_particles->m_d_massInv,
+		dem_particles->m_d_massInv,
+		sph_cell_data,
+		dem_cell_data,
+		num_sph_particles
+		);
+	getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
+	
 }

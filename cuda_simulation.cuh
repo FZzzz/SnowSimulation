@@ -20,11 +20,6 @@ void setParams(SimParams* param_in);
 
 void integratePBD(
     ParticleSet* particles,
-    /*
-    float3* pos, float3* vel,
-    float3* force, float* massInv,
-    float3* predict_pos, float3* new_pos,
-    */
     float deltaTime,
     uint numParticles
 );
@@ -92,7 +87,7 @@ void solve_pbd_dem(
     int          iteration
 );
 
-/* solve dem particle as sph particles*/
+/* solve dem particle as sph particles */
 void solve_dem_sph(
     ParticleSet* dem_particles,
     ParticleSet* sph_particles,

@@ -61,7 +61,6 @@ void ParticleSystem::Release()
 {
 	if (m_particles != nullptr)
 	{
-
 		// Release fluid particle cuda memory
 		//cudaFree(m_particles->m_d_prev_positions);
 		//cudaFree(m_particles->m_d_positions);
