@@ -45,6 +45,7 @@ struct SimParams
 	float kinematic_friction;
 
 	float volume;
+	float sor_coeff;
 };
 
 class Simulation

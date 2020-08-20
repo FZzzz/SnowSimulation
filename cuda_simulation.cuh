@@ -14,8 +14,6 @@ __constant__ SimParams params;
 
 void allocateArray(void** devPtr, size_t size);
 
-void cuda_test_offset(unsigned int block_num, unsigned int thread_num, float3* positions);
-
 void setParams(SimParams* param_in);
 
 void integratePBD(

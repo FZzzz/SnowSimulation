@@ -15,7 +15,6 @@
 #include "Renderer.h"
 #include "AssetImporter.h"
 #include "GUIManager.h"
-#include "Jelly.h"
 #include "Simulation.h"
 #include "ParticleSystem.h"
 
@@ -57,8 +56,6 @@ private:
 	void Update();
 	void SignalFail();
 	void SetUpImGui();
-	void GenerateRadomParticles();
-	void GenerateFluidParticles();
 
 	static GLFWApp* appInstance;
 

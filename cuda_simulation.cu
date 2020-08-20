@@ -503,22 +503,25 @@ void integrate_pbd_d(
 		t_vel *= params.boundary_damping;
 	}
 	*/
-	if (t_pos.y <= 0.f)
+	/*
+	if (pos[index].y <= 0.f)
 	{
-		t_pos.y = 0.f;
+		pos[index].y = 0.f;
 		t_vel.y = abs(t_vel.y);
 		t_vel *= params.boundary_damping;
 	}
+	*/
 	
-	
-	/* Velocity limitation
-	if (length(t_vel) > 5.f)
+	// Velocity limitation
+	/*
+	float limit = 0.5f;
+	if (length(t_vel) > limit)
 	{
-		t_vel = (5.f / length(t_vel)) * t_vel ;
+		t_vel = (limit / length(t_vel)) * t_vel ;
 	}
 	*/
 	
-	predict_pos[index] = t_pos;// pos[index] + dt * t_vel;
+	predict_pos[index] = pos[index] + dt * t_vel;
 	vel[index] = t_vel; 
 	new_pos[index] = predict_pos[index];
 
@@ -1484,7 +1487,7 @@ void apply_correction(
 	
 	uint original_index = cell_data.grid_index[index];
 
-	new_pos[original_index] = cell_data.sorted_pos[index] + correction[original_index];
+	new_pos[original_index] = cell_data.sorted_pos[index] + params.sor_coeff * correction[original_index];
 	predict_pos[original_index] = new_pos[original_index];
 	// write back to sorted_pos for next iteration
 	cell_data.sorted_pos[index] = new_pos[original_index];
@@ -2160,6 +2163,25 @@ void solve_pbd_dem(
 	compute_grid_size(numParticles, MAX_THREAD_NUM, numBlocks, numThreads);
 	for (int i = 0; i < iteration; ++i)
 	{
+		if (i != 0)
+		{
+			calculate_hash(
+				cell_data,
+				dem_particles->m_d_predict_positions,
+				numParticles
+			);
+			sort_particles(
+				cell_data,
+				numParticles
+			);
+			reorder_data(
+				cell_data,
+				//particles->m_d_positions,
+				dem_particles->m_d_predict_positions,
+				numParticles,
+				(64*64*64)
+			);
+		}
 		compute_distance_correction << <numBlocks, numThreads >> > (
 			dem_particles->m_d_correction,
 			dem_particles->m_d_massInv,
@@ -2177,32 +2199,48 @@ void solve_pbd_dem(
 			numParticles
 			);
 		getLastCudaError("Kernel execution failed: apply_correction ");
-		
-		compute_friction_correction << <numBlocks, numThreads >> > (
-			dem_particles->m_d_correction,
-			dem_particles->m_d_new_positions,
-			dem_particles->m_d_positions,
-			dem_particles->m_d_massInv,
-			boundary_particles->m_d_massInv,
-			cell_data,
-			b_cell_data,
-			numParticles
-			);
 
-		getLastCudaError("Kernel execution failed: compute_friction_correction ");
-		apply_correction << <numBlocks, numThreads >> > (
-			dem_particles->m_d_new_positions,
-			dem_particles->m_d_predict_positions,
-			dem_particles->m_d_correction,
-			cell_data,
-			numParticles
-			);
-		getLastCudaError("Kernel execution failed: apply_correction ");
-		
 	}
 
+	calculate_hash(
+		cell_data,
+		dem_particles->m_d_predict_positions,
+		numParticles
+	);
+	sort_particles(
+		cell_data,
+		numParticles
+	);
+	reorder_data(
+		cell_data,
+		//particles->m_d_positions,
+		dem_particles->m_d_predict_positions,
+		numParticles,
+		(64 * 64 * 64)
+	);
 
-		
+	compute_friction_correction << <numBlocks, numThreads >> > (
+		dem_particles->m_d_correction,
+		dem_particles->m_d_new_positions,
+		dem_particles->m_d_positions,
+		dem_particles->m_d_massInv,
+		boundary_particles->m_d_massInv,
+		cell_data,
+		b_cell_data,
+		numParticles
+		);
+
+	getLastCudaError("Kernel execution failed: compute_friction_correction ");
+	apply_correction << <numBlocks, numThreads >> > (
+		dem_particles->m_d_new_positions,
+		dem_particles->m_d_predict_positions,
+		dem_particles->m_d_correction,
+		cell_data,
+		numParticles
+		);
+	getLastCudaError("Kernel execution failed: apply_correction ");
+
+
 	// finalize correction
 	finalize_correction << <numBlocks, numThreads >> > (
 		dem_particles->m_d_positions,

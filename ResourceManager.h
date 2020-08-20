@@ -7,7 +7,6 @@
 #include "Camera.h"
 #include "AnimCharacter.h"
 #include "Particle.h"
-#include "Jelly.h"
 /*GameObject_sp
 	Resource Manager Caches all resources/ object in this program.
 	Every new allocated object will be regist in ResourceManager.
@@ -40,7 +39,6 @@ public:
 	void AddMesh(std::shared_ptr<Mesh> mesh);
 	void AddShader(std::shared_ptr<Shader> shader);
 	void AddAnimCharacter(std::shared_ptr<AnimCharacter> anim_character);
-	void AddJelly(std::shared_ptr<Jelly> jelly);
 	void GenerateParticle(glm::vec3 pos, float mass);
 
 	std::shared_ptr<Mesh> FindMeshByName(std::string name);
@@ -54,7 +52,6 @@ public:
 	inline const std::vector<std::shared_ptr<Mesh>>& getMeshes() { return m_mesh_vec; };
 	inline const std::vector<std::shared_ptr<Shader>>& getShaders() { return m_shader_vec; };
 	inline const std::vector<std::shared_ptr<AnimCharacter>>& getAnimCharacters() { return m_anim_character_vec; };
-	inline const std::vector<std::shared_ptr<Jelly>>& getJellies() { return m_jellies; };
 	inline const std::vector<Particle_Ptr>& getParticles() { return m_particles; };
 	inline Shader_Object_Map& getShaderObjectMap() { return m_shader_object_map; };
 	//inline const std::shared_ptr<SimCharacter> getSimCharacter() { return m_sim_character; };
@@ -77,7 +74,6 @@ private:
 	Shader_Object_Map m_shader_object_map;
 
 	std::vector<std::shared_ptr<AnimCharacter>> m_anim_character_vec;	// update(anim_character), render(anim_character)
-	std::vector < std::shared_ptr<Jelly>>		m_jellies; 
 
 	std::vector<std::shared_ptr<Mesh>> m_mesh_vec;			// Mesh vector
 	std::vector<std::shared_ptr<Mesh>> m_static_mesh_vec;	// combined static meshes

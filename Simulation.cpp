@@ -240,10 +240,10 @@ bool Simulation::StepCUDA(float dt)
 
 	static int count = 0;
 	if(!m_pause) count++;
-	/*
-	if (count == 2000)
+	
+	if (count == 20000)
 		m_pause = true, count = 0;
-	*/
+	
 	return true;
 }
 
@@ -341,11 +341,13 @@ void Simulation::SetupSimParams()
 	m_sim_params->damping = 0.02f;
 	m_sim_params->shear = 0.1f;
 	m_sim_params->attraction = 0.0f;
-	m_sim_params->boundary_damping = 0.1f;
+	m_sim_params->boundary_damping = 0.0f;
 	
 	// ice friction at -12 C
 	m_sim_params->static_friction = 1.0f;
 	m_sim_params->kinematic_friction = 0.75f;
+
+	m_sim_params->sor_coeff = 0.5f;
 
 	m_particle_system->setParticleRadius(particle_radius);
 	setParams(m_sim_params);
@@ -557,9 +559,9 @@ void Simulation::GenerateFluidCube()
 				float z_jitter = 0.001f * diameter * static_cast<float>(rand() % 3);
 
 				//int idx = k + j * 10 + i * 100;
-				x = 0.0f + diameter * static_cast<float>(i);// +x_jitter;
-				y = 0.75f + diameter * static_cast<float>(j);// +y_jitter;
-				z = 0.0f + diameter * static_cast<float>(k);// +z_jitter;
+				x = 0.0f + diameter * static_cast<float>(i) +x_jitter;
+				y = 0.55f + diameter * static_cast<float>(j) +y_jitter;
+				z = 0.0f + diameter * static_cast<float>(k) +z_jitter;
 				glm::vec3 pos(x, y, z);
 				particles->m_positions[idx] = pos;
 				particles->m_new_positions[idx] = pos;

@@ -124,11 +124,6 @@ void ResourceManager::AddAnimCharacter(std::shared_ptr<AnimCharacter> anim_chara
 	m_anim_character_vec.push_back(anim_character);
 }
 
-void ResourceManager::AddJelly(std::shared_ptr<Jelly> jelly)
-{
-	m_jellies.push_back(jelly);
-}
-
 void ResourceManager::GenerateParticle(glm::vec3 pos, float mass)
 {
 	auto particle = std::make_shared<Particle>(pos, mass);

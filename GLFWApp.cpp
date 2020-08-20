@@ -383,7 +383,6 @@ void GLFWApp::Render()
 void GLFWApp::Update()
 {
 	auto anim_characters = m_resource_manager->getAnimCharacters();
-	auto jellies = m_resource_manager->getJellies();
 
 	m_previousTime = m_currentTime;
 	m_currentTime = static_cast<float>(glfwGetTime());
@@ -416,54 +415,6 @@ void GLFWApp::SetUpImGui()
 	ImGui_ImplGlfwGL3_Init(m_window, false);
 	ImGui::StyleColorsDark();
 }
-
-void GLFWApp::GenerateRadomParticles() 
-{
-	float x, y, z;
-	std::vector<Particle_Ptr> particles;
-
-	for (int i = 0; i < 1000; ++i)
-	{
-		x = static_cast<float>(rand() % 1000) / 50.f - 10.f;
-		y = static_cast<float>(rand() % 1000) / 100.f;
-		z = static_cast<float>(rand() % 1000) / -20.f;
-		auto particle = std::make_shared<Particle>(glm::vec3(x, y, z), 0.1f);
-		particles.push_back(particle);
-	}
-
-	m_particle_system->Update();
-}
-
-void GLFWApp::GenerateFluidParticles()
-{
-	float x, y, z;
-
-	ParticleSet* particles = m_particle_system->AllocateParticles(10000, 0.1f);
-	// set positions
-	for (int i = 0; i < 10; ++i)
-	{
-		for (int j = 0; j < 100; ++j)
-		{
-			for (int k = 0; k < 10; ++k)
-			{
-				int idx = k + j * 10 + i * 1000;
-				x = 0.f + 0.5f * static_cast<float>(i);
-				y = 0.5f + 0.5f * static_cast<float>(j);
-				z = -10.f + 0.5f * static_cast<float>(k);
-				glm::vec3 pos(x, y, z);
-				particles->m_positions[idx] = pos;
-				particles->m_new_positions[idx] = pos;
-				particles->m_predict_positions[idx] = pos;
-			}
-		}
-	}
-#ifdef _USE_CUDA_
-	m_particle_system->InitializeCUDA();
-#else
-	m_particle_system->Initialize();
-#endif
-}
-
 /*
  * GUI functions
  */
