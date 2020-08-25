@@ -71,6 +71,7 @@ public:
 
 	// setters
 	void setGravity(float gravity);
+	void setClipLength(int length);
 
 	// getters
 	inline float getGravity() { return m_world_desc.gravity; };
@@ -82,7 +83,7 @@ private:
 
 	void InitializeBoundaryParticles();
 	void InitializeBoundaryCudaData();
-	void GenerateFluidCube();
+	void GenerateFluidCube(glm::vec3 half_extends);
 
 	void PredictPositions(float dt);
 	void FindNeighborParticles(float effective_radius);
@@ -115,8 +116,6 @@ private:
 	float m_volume;
 	float m_particle_mass;
 	
-	CellData m_d_boundary_cell_data;
-
 	std::shared_ptr<ConstraintSolver> m_solver;
 	std::shared_ptr<ParticleSystem> m_particle_system;
 	std::shared_ptr<NeighborSearch> m_neighbor_searcher;
@@ -129,6 +128,9 @@ private:
 	/* The collision table record who contact with whom */
 	std::vector<std::vector<Collider*>> m_collision_table;
 	
+	/*Simulation control parameters*/
+	int clip_length; // clip length of how many frames at the each run
+
 };
 
 #endif

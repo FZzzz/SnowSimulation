@@ -16,10 +16,11 @@ void allocateArray(void** devPtr, size_t size);
 
 void setParams(SimParams* param_in);
 
-void integratePBD(
+void integrate_pbd(
     ParticleSet* particles,
     float deltaTime,
-    uint numParticles
+    uint numParticles,
+    bool cd_on
 );
 
 void compute_grid_size(uint n, uint block_size, uint& num_blocks, uint& num_threads);

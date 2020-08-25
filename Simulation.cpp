@@ -24,15 +24,6 @@ Simulation::Simulation(SimWorldDesc desc)
 	: m_solver(nullptr), m_particle_system(nullptr), m_neighbor_searcher(nullptr), 
 	m_initialized(false), m_world_desc(desc), m_pause(false)
 {
-	// Free cuda memory
-	if (m_particle_system->getBoundaryParticles())
-	{
-		cudaFree(m_d_boundary_cell_data.grid_hash);
-		cudaFree(m_d_boundary_cell_data.grid_index);
-		cudaFree(m_d_boundary_cell_data.cell_start);
-		cudaFree(m_d_boundary_cell_data.cell_end);
-		cudaFree(m_d_boundary_cell_data.sorted_pos);
-	}
 }
 
 Simulation::~Simulation()
@@ -44,12 +35,13 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_particle_system = particle_system;
 	
 	uint3 grid_size = make_uint3(64, 64, 64);
+	glm::vec3 half_extends = glm::vec3(0.5f, 0.5f, 0.5f);
 	
 	m_neighbor_searcher = std::make_shared<NeighborSearch>(m_particle_system, grid_size);
 	m_solver = std::make_shared<ConstraintSolver>(mode);
 
 	SetupSimParams();
-	GenerateFluidCube();
+	GenerateFluidCube(half_extends);
 	InitializeBoundaryParticles();
 
 #ifdef _USE_CUDA_
@@ -145,7 +137,8 @@ bool Simulation::StepCUDA(float dt)
 	if (m_pause)
 		return true;
 	
-	int iterations = 10;
+	int iterations = 2;
+	bool cd_on = false;
 
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 
@@ -172,10 +165,11 @@ bool Simulation::StepCUDA(float dt)
 	//integrate(particles->m_d_positions, particles->m_d_velocity, dt, particles->m_size);
 	
 	t1 = std::chrono::high_resolution_clock::now();
-	integratePBD(
+	integrate_pbd(
 		particles,
 		dt,
-		numParticles
+		numParticles,
+		true
 		);
 	
 	t2 = std::chrono::high_resolution_clock::now();
@@ -197,7 +191,7 @@ bool Simulation::StepCUDA(float dt)
 		m_neighbor_searcher->m_num_grid_cells
 	);
 	t3 = std::chrono::high_resolution_clock::now();
-	
+	/*
 	solve_pbd_dem(
 		particles,
 		boundary_particles,
@@ -208,8 +202,8 @@ bool Simulation::StepCUDA(float dt)
 		dt,
 		iterations
 	);
+	*/
 	
-	/*
 	solve_sph_fluid(
 		m_d_rest_density,
 		particles,
@@ -221,7 +215,6 @@ bool Simulation::StepCUDA(float dt)
 		dt,
 		iterations
 	);
-	*/
 	
 	t4 = std::chrono::high_resolution_clock::now();
 
@@ -307,6 +300,10 @@ void Simulation::setGravity(float gravity)
 	m_world_desc.gravity = gravity;
 }
 
+void Simulation::setClipLength(int length)
+{
+}
+
 void Simulation::SetupSimParams()
 {
 	//const size_t n_particles = 1000;
@@ -341,7 +338,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->damping = 0.02f;
 	m_sim_params->shear = 0.1f;
 	m_sim_params->attraction = 0.0f;
-	m_sim_params->boundary_damping = 0.0f;
+	m_sim_params->boundary_damping = 0.98f;
 	
 	// ice friction at -12 C
 	m_sim_params->static_friction = 1.0f;
@@ -524,7 +521,7 @@ void Simulation::InitializeBoundaryCudaData()
 	cudaGraphicsUnmapResources(1, vbo_resource, 0);
 }
 
-void Simulation::GenerateFluidCube()
+void Simulation::GenerateFluidCube(glm::vec3 half_extends)
 {
 	std::srand(time(NULL));
 	// diameter of particle
@@ -532,11 +529,10 @@ void Simulation::GenerateFluidCube()
 	// number of particles on x,y,z
 	int nx, ny, nz;
 	// fluid cube extends
-	glm::vec3 half_extend(0.5f, 0.5f, 0.5f);
 	
-	nx = static_cast<int>(half_extend.x / diameter);
-	ny = static_cast<int>(half_extend.y / diameter);
-	nz = static_cast<int>(half_extend.z / diameter);
+	nx = static_cast<int>(half_extends.x / diameter);
+	ny = static_cast<int>(half_extends.y / diameter);
+	nz = static_cast<int>(half_extends.z / diameter);
 
 	float x, y, z;
 	
