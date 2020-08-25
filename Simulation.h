@@ -129,7 +129,9 @@ private:
 	std::vector<std::vector<Collider*>> m_collision_table;
 	
 	/*Simulation control parameters*/
-	int clip_length; // clip length of how many frames at the each run
+	uint32_t m_iterations;
+	int m_clip_length; // clip length of how many frames at the each run
+	
 
 };
 

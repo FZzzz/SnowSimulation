@@ -15,7 +15,9 @@ Simulation::Simulation()
 	: m_solver(nullptr), m_particle_system(nullptr), m_neighbor_searcher(nullptr),
 	m_initialized(false), m_world_desc(SimWorldDesc(-9.8f, 0.f)), m_pause(true),
 	m_first_frame(true),
-	m_rest_density(0.8f)
+	m_rest_density(0.8f),
+	m_iterations(1),
+	m_clip_length(1000)
 {
 	
 
@@ -136,8 +138,7 @@ bool Simulation::StepCUDA(float dt)
 
 	if (m_pause)
 		return true;
-	
-	int iterations = 2;
+
 	bool cd_on = false;
 
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
@@ -191,7 +192,7 @@ bool Simulation::StepCUDA(float dt)
 		m_neighbor_searcher->m_num_grid_cells
 	);
 	t3 = std::chrono::high_resolution_clock::now();
-	/*
+	
 	solve_pbd_dem(
 		particles,
 		boundary_particles,
@@ -200,10 +201,10 @@ bool Simulation::StepCUDA(float dt)
 		numParticles,
 		b_numParticles,
 		dt,
-		iterations
+		m_iterations
 	);
-	*/
 	
+	/*
 	solve_sph_fluid(
 		m_d_rest_density,
 		particles,
@@ -213,9 +214,9 @@ bool Simulation::StepCUDA(float dt)
 		m_neighbor_searcher->m_d_boundary_cell_data,
 		b_numParticles,
 		dt,
-		iterations
+		m_iterations
 	);
-	
+	*/
 	t4 = std::chrono::high_resolution_clock::now();
 
 	{
@@ -234,7 +235,7 @@ bool Simulation::StepCUDA(float dt)
 	static int count = 0;
 	if(!m_pause) count++;
 	
-	if (count == 20000)
+	if (count == m_clip_length)
 		m_pause = true, count = 0;
 	
 	return true;
@@ -259,6 +260,7 @@ void Simulation::AddStaticConstraints(std::vector<Constraint*> constraints)
 void Simulation::SetSolverIteration(uint32_t iter_count)
 {
 	m_solver->setSolverIteration(iter_count);
+	m_iterations = iter_count;
 }
 
 void Simulation::ComputeRestDensity()
@@ -302,6 +304,7 @@ void Simulation::setGravity(float gravity)
 
 void Simulation::setClipLength(int length)
 {
+	m_clip_length = length;
 }
 
 void Simulation::SetupSimParams()

@@ -213,7 +213,16 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	/* Managers initialization */
 	m_resource_manager->ArrangeStaticObjects();
 	m_simulator->Initialize(PBD_MODE::XPBD, m_particle_system);
-	m_simulator->SetSolverIteration(2);
+	//m_simulator->SetSolverIteration(2);
+
+	// Simulation control settings
+	{
+		uint32_t iterations = 10;
+		int clip_length = 2000;
+		m_simulator->SetSolverIteration(iterations);
+		m_simulator->setClipLength(clip_length);
+
+	}
 
 	return true;
 }
