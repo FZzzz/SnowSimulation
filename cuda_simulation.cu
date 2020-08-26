@@ -2349,8 +2349,8 @@ void snow_simulation(
 	int iterations
 )
 {
-	uint num_threads, num_blocks;
-	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, num_blocks, num_threads);
+	uint sph_num_threads, sph_num_blocks;
+	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, sph_num_blocks, sph_num_threads);
 	uint dem_num_threads, dem_num_blocks;
 	compute_grid_size(dem_num_particles, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
 
@@ -2442,7 +2442,7 @@ void snow_simulation(
 			b_num_particles
 			);
 
-		apply_correction << <num_blocks, num_threads >> > (
+		apply_correction << <sph_num_blocks, sph_num_threads >> > (
 			sph_particles->m_d_new_positions,
 			sph_particles->m_d_predict_positions,
 			sph_particles->m_d_correction,
@@ -2461,7 +2461,52 @@ void snow_simulation(
 		getLastCudaError("Kernel execution failed: apply_correction ");
 	}
 
-	finalize_correction << <num_blocks, num_threads >> > (
+	calculate_hash(
+		dem_cell_data,
+		dem_particles->m_d_predict_positions,
+		dem_num_particles
+		);
+	sort_particles(
+		dem_cell_data,
+		dem_num_particles
+		);
+	reorder_data(
+		dem_cell_data,
+		//particles->m_d_positions,
+		dem_particles->m_d_predict_positions,
+		dem_num_particles,
+		(64 * 64 * 64)
+		);
+
+	calculate_hash(
+		sph_cell_data,
+		sph_particles->m_d_predict_positions,
+		sph_num_particles
+		);
+	sort_particles(
+		sph_cell_data,
+		sph_num_particles
+		);
+	reorder_data(
+		sph_cell_data,
+		//particles->m_d_positions,
+		sph_particles->m_d_predict_positions,
+		sph_num_particles,
+		(64 * 64 * 64)
+		);
+
+	compute_friction_correction << <dem_num_blocks, dem_num_threads >> > (
+		dem_particles->m_d_correction,
+		dem_particles->m_d_new_positions,
+		dem_particles->m_d_positions,
+		dem_particles->m_d_massInv,
+		boundary_particles->m_d_massInv,
+		dem_cell_data,
+		b_cell_data,
+		dem_num_particles
+		);
+
+	finalize_correction << <sph_num_blocks, sph_num_threads >> > (
 		sph_particles->m_d_positions,
 		sph_particles->m_d_new_positions,
 		sph_particles->m_d_predict_positions,
