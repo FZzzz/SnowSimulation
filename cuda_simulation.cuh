@@ -95,8 +95,8 @@ void solve_sph_dem(
 );
 
 void snow_simulation(
-    ParticleSet* dem_particles,
     ParticleSet* sph_particles,
+    ParticleSet* dem_particles,
     ParticleSet* boundary_particles,
     CellData     sph_cell_data,
     CellData     dem_cell_data,
@@ -104,7 +104,8 @@ void snow_simulation(
     uint         sph_num_particles,
     uint         dem_num_particles,
     uint         b_num_particles,
-    float        dt
+    float        dt,
+    int          iterations
 );
 
 #endif

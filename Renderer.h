@@ -23,6 +23,10 @@ public:
 		
 	void Render();
 
+	void SwitchSphVisibility();
+	void SwitchDEMVisibility();
+	void SwitchBoundaryVisibility();
+
 	// setters
 	void setMainCamera(std::shared_ptr<Camera> camera);
 	void setClearColor(glm::vec4 clear_color);
@@ -52,6 +56,10 @@ private:
 	GLuint m_ubo;
 
 	glm::vec4 m_clear_color;
+
+	bool m_sph_visibility;
+	bool m_dem_visibility;
+	bool m_boundary_visibility;
 
 };
 

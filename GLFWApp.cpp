@@ -217,7 +217,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 
 	// Simulation control settings
 	{
-		uint32_t iterations = 10;
+		uint32_t iterations = 2;
 		int clip_length = 2000;
 		m_simulator->SetSolverIteration(iterations);
 		m_simulator->setClipLength(clip_length);
@@ -295,6 +295,24 @@ void Key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		{
 			auto simulator = instance->getSimulator();
 			simulator->Pause();
+			break;
+		}
+		case GLFW_KEY_1:
+		{
+			auto renderer = instance->getRenderer();
+			renderer->SwitchSphVisibility();
+			break;
+		}
+		case GLFW_KEY_2:
+		{
+			auto renderer = instance->getRenderer();
+			renderer->SwitchDEMVisibility();
+			break;
+		}
+		case GLFW_KEY_3:
+		{
+			auto renderer = instance->getRenderer();
+			renderer->SwitchBoundaryVisibility();
 			break;
 		}
 		}

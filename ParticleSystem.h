@@ -21,20 +21,20 @@ public:
 	void UpdateCUDA();
 	void Release();
 
-	ParticleSet* AllocateParticles(size_t n, float particle_mass);
-	ParticleSet* AllocateDEMParticles();
+	ParticleSet* AllocateSPHParticles(size_t n, float particle_mass);
+	ParticleSet* AllocateDEMParticles(size_t n, float particle_mass);
 	ParticleSet* AllocateBoundaryParticles();
 
 	//void setParticles(std::vector<std::shared_ptr<Particle>> particles);
 	void setParticleRadius(float particle_radius);
 
-	inline ParticleSet* getParticles() { return m_particles; };
+	inline ParticleSet* getSPHParticles() { return m_particles; };
 	inline ParticleSet* getDEMParticles() { return m_dem_particles; };
 	inline ParticleSet* getBoundaryParticles() { return m_boundary_particles; };
 //	inline std::vector<std::shared_ptr<Particle>>& getParticles() { return m_particles; };
-	inline GLuint getVAO() { return m_vao; };
-	inline GLuint getVBO() { return m_vbo; };
-	inline GLuint getEBO() { return m_ebo; };
+	inline GLuint getVAO() { return m_sph_vao; };
+	inline GLuint getVBO() { return m_sph_vbo; };
+	inline GLuint getEBO() { return m_sph_ebo; };
 
 	inline GLuint getDEMVAO() { return m_dem_vao; };
 	inline GLuint getDEMVBO() { return m_dem_vbo; };
@@ -44,7 +44,7 @@ public:
 	inline GLuint getBoundaryVBO() { return m_boundary_vbo; };
 	inline GLuint getBoundaryEBO() { return m_boundary_ebo; };
 
-	inline cudaGraphicsResource** getCUDAGraphicsResource() { return &m_cuda_vbo_resource; };
+	inline cudaGraphicsResource** getSPHCUDAGraphicsResource() { return &m_sph_cuda_vbo_resource; };
 	inline cudaGraphicsResource** getBoundaryCUDAGraphicsResource() { return &m_boundary_cuda_vbo_resource; };
 	inline cudaGraphicsResource** getDEMCUDAGraphicsResource() { return &m_dem_cuda_vbo_resource; };
 
@@ -73,9 +73,9 @@ private:
 	
 	float m_particle_radius;
 
-	GLuint m_vao;
-	GLuint m_vbo;
-	GLuint m_ebo;
+	GLuint m_sph_vao;
+	GLuint m_sph_vbo;
+	GLuint m_sph_ebo;
 
 	GLuint m_dem_vao;
 	GLuint m_dem_vbo;
@@ -85,11 +85,11 @@ private:
 	GLuint m_boundary_vbo;
 	GLuint m_boundary_ebo;
 		
-	GLuint m_cuda_vbo;
+	GLuint m_sph_cuda_vbo;
 	GLuint m_dem_cuda_vbo;
 	GLuint m_boundary_cuda_vbo;
 	
-	struct cudaGraphicsResource* m_cuda_vbo_resource;
+	struct cudaGraphicsResource* m_sph_cuda_vbo_resource;
 	struct cudaGraphicsResource* m_dem_cuda_vbo_resource;
 	struct cudaGraphicsResource* m_boundary_cuda_vbo_resource;
 	

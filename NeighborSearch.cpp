@@ -33,7 +33,7 @@ void NeighborSearch::Initialize()
     const auto& particles = m_particle_system->getParticles();
     m_search_cache.resize(particles.size(), std::vector<size_t>());
     */
-    const ParticleSet* const particles = m_particle_system->getParticles();
+    const ParticleSet* const particles = m_particle_system->getSPHParticles();
     m_search_cache.resize(particles->m_size, std::vector<size_t>());
 
 }
@@ -44,7 +44,8 @@ void NeighborSearch::InitializeCUDA()
     assert(m_particle_system != nullptr);
 #endif
 
-    const ParticleSet* const sph_particles = m_particle_system->getParticles();
+    const ParticleSet* const sph_particles = m_particle_system->getSPHParticles();
+    const ParticleSet* const dem_particles = m_particle_system->getDEMParticles();
     const ParticleSet* const boundary_particles = m_particle_system->getBoundaryParticles();
 
     /*Allocate CUDA memory*/
@@ -58,6 +59,17 @@ void NeighborSearch::InitializeCUDA()
         cudaMalloc((void**)&m_d_sph_cell_data.cell_end, m_num_grid_cells * sizeof(uint));
 
         cudaMalloc((void**)&m_d_sph_cell_data.sorted_pos, sph_particles->m_size * sizeof(float3));
+    }
+
+    if (dem_particles != nullptr)
+    {
+        cudaMalloc((void**)&m_d_dem_cell_data.grid_hash, dem_particles->m_size * sizeof(uint));
+        cudaMalloc((void**)&m_d_dem_cell_data.grid_index, dem_particles->m_size * sizeof(uint));
+
+        cudaMalloc((void**)&m_d_dem_cell_data.cell_start, m_num_grid_cells * sizeof(uint));
+        cudaMalloc((void**)&m_d_dem_cell_data.cell_end, m_num_grid_cells * sizeof(uint));
+
+        cudaMalloc((void**)&m_d_dem_cell_data.sorted_pos, dem_particles->m_size * sizeof(float3));
     }
 
     /* Boundary particle cell data initialization */
@@ -75,7 +87,7 @@ void NeighborSearch::InitializeCUDA()
 
 void NeighborSearch::Release()
 {
-    const ParticleSet* const sph_particles = m_particle_system->getParticles();
+    const ParticleSet* const sph_particles = m_particle_system->getSPHParticles();
     const ParticleSet* const boundary_particles = m_particle_system->getBoundaryParticles();
 
     if (sph_particles != nullptr)
@@ -109,7 +121,7 @@ void NeighborSearch::NaiveSearch(float effective_radius)
         m_search_cache[i].clear();
 
     const float square_h = effective_radius * effective_radius;
-    const ParticleSet* const particles = m_particle_system->getParticles();
+    const ParticleSet* const particles = m_particle_system->getSPHParticles();
     //#pragma omp parallel default(shared) num_threads(8)// Personally I think this is useless... (cannot prevent race condition)
     {
         //#pragma omp for schedule(dynamic)  // Using round-robin scheduling
@@ -137,7 +149,7 @@ void NeighborSearch::SpatialSearch(float effective_radius)
         return;
 
     const float square_h = effective_radius * effective_radius;
-    const ParticleSet* const particles = m_particle_system->getParticles();
+    const ParticleSet* const particles = m_particle_system->getSPHParticles();
 
     for (auto entry : m_hashtable)
     {

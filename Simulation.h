@@ -79,7 +79,7 @@ private:
 
 	void InitializeBoundaryParticles();
 	void InitializeBoundaryCudaData();
-	void GenerateFluidCube(glm::vec3 half_extends);
+	void GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, int opt);
 
 	void PredictPositions(float dt);
 	void FindNeighborParticles(float effective_radius);

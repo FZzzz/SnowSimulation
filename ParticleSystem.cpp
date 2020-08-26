@@ -10,9 +10,9 @@ ParticleSystem::ParticleSystem() :
 	m_boundary_particles(nullptr),
 	//m_particles(nullptr),
 	m_particle_radius(5.f),
-	m_vao(-1),
-	m_vbo(-1),
-	m_ebo(-1)
+	m_sph_vao(-1),
+	m_sph_vbo(-1),
+	m_sph_ebo(-1)
 {
 }
 
@@ -78,7 +78,7 @@ void ParticleSystem::Release()
 		cudaFree(m_particles->m_d_C);
 		cudaFree(m_particles->m_d_lambda);
 
-		cudaGraphicsUnregisterResource(m_cuda_vbo_resource);
+		cudaGraphicsUnregisterResource(m_sph_cuda_vbo_resource);
 		delete m_particles;
 	}
 
@@ -120,15 +120,15 @@ void ParticleSystem::Release()
 
 }
 
-ParticleSet* ParticleSystem::AllocateParticles(size_t n, float particle_mass)
+ParticleSet* ParticleSystem::AllocateSPHParticles(size_t n, float particle_mass)
 {
 	m_particles = new ParticleSet(n, particle_mass);
 	return m_particles;
 }
 
-ParticleSet* ParticleSystem::AllocateDEMParticles()
+ParticleSet* ParticleSystem::AllocateDEMParticles(size_t n, float particle_mass)
 {
-	m_dem_particles = new ParticleSet();
+	m_dem_particles = new ParticleSet(n, particle_mass);
 	return m_dem_particles;
 }
 
@@ -527,7 +527,7 @@ void ParticleSystem::SetupCUDAMemory()
 void ParticleSystem::RegisterCUDAVBO()
 {
 	if(m_particles)
-		cudaGraphicsGLRegisterBuffer(&m_cuda_vbo_resource, m_vbo, cudaGraphicsMapFlagsNone);
+		cudaGraphicsGLRegisterBuffer(&m_sph_cuda_vbo_resource, m_sph_vbo, cudaGraphicsMapFlagsNone);
 	if(m_dem_particles)
 		cudaGraphicsGLRegisterBuffer(&m_dem_cuda_vbo_resource, m_dem_vbo, cudaGraphicsMapFlagsNone);
 	if(m_boundary_particles)
@@ -537,9 +537,9 @@ void ParticleSystem::RegisterCUDAVBO()
 void ParticleSystem::GenerateGLBuffers()
 {
 	// fluid particles
-	glGenVertexArrays(1, &m_vao);
-	glGenBuffers(1, &m_vbo);
-	glGenBuffers(1, &m_ebo); // NOTICE: not using
+	glGenVertexArrays(1, &m_sph_vao);
+	glGenBuffers(1, &m_sph_vbo);
+	glGenBuffers(1, &m_sph_ebo); // NOTICE: not using
 
 	glGenVertexArrays(1, &m_dem_vao);
 	glGenBuffers(1, &m_dem_vbo);
@@ -558,9 +558,9 @@ void ParticleSystem::UpdateGLBUfferData()
 		return;
 
 	// Fluid particle GL buffer data
-	glBindVertexArray(m_vao);
+	glBindVertexArray(m_sph_vao);
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, m_sph_vbo);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * m_particles->m_positions.size(),
 		m_particles->m_positions.data(), GL_DYNAMIC_DRAW);
 

@@ -1309,7 +1309,7 @@ void compute_position_correction(
 		}
 	}
 	corr = (1.f / params.rest_density) * corr;
-	correction[originalIndex] = corr;
+	correction[originalIndex] += corr;
 	//compute new position
 	//new_pos[originalIndex] = pos + corr;
 }
@@ -1443,8 +1443,31 @@ void solve_sph_fluid(
 	uint num_threads, num_blocks;
 	compute_grid_size(numParticles, MAX_THREAD_NUM, num_blocks, num_threads);
 
+	uint b_num_threads, b_num_blocks;
+	compute_grid_size(b_num_particles, MAX_THREAD_NUM, b_num_blocks, b_num_threads);
+
 	for (int i = 0; i < iterations; ++i)
 	{
+		if (i != 0)
+		{
+			calculate_hash(
+				sph_cell_data,
+				sph_particles->m_d_predict_positions,
+				numParticles
+				);
+			sort_particles(
+				sph_cell_data,
+				numParticles
+				);
+			reorder_data(
+				sph_cell_data,
+				//particles->m_d_positions,
+				sph_particles->m_d_predict_positions,
+				numParticles,
+				(64 * 64 * 64)
+				);
+		}
+
 		// CUDA SPH Kernel
 		// compute density
 		//t1 = std::chrono::high_resolution_clock::now();
@@ -1459,7 +1482,7 @@ void solve_sph_fluid(
 			);
 		getLastCudaError("Kernel execution failed: compute_density_d ");
 		// compute density contributed by boundary particles
-		compute_boundary_density_d << <num_blocks, num_threads >> > (
+		compute_boundary_density_d << <b_num_blocks, b_num_threads >> > (
 			sph_particles->m_d_mass,
 			boundary_particles->m_d_mass,
 			boundary_particles->m_d_volume,
@@ -1483,7 +1506,7 @@ void solve_sph_fluid(
 			numParticles
 			);
 		getLastCudaError("Kernel execution failed: compute_lambdas_d ");
-		compute_boundary_lambdas_d << <num_blocks, num_threads >> > (
+		compute_boundary_lambdas_d << <b_num_blocks, b_num_threads >> > (
 			boundary_particles->m_d_lambda,
 			boundary_particles->m_d_volume,
 			boundary_particles->m_d_positions,
@@ -2149,26 +2172,172 @@ void solve_sph_dem(
 	
 }
 
-void compute_snow_sph_density(
-	ParticleSet* dem_particles,
+inline void compute_snow_pbf_density(
 	ParticleSet* sph_particles,
+	ParticleSet* dem_particles,
 	ParticleSet* boundary_particles,
 	CellData sph_cell_data,
 	CellData dem_cell_data,
 	CellData b_cell_data,
-	uint sph_num_particles
+	uint sph_num_particles,
+	uint dem_num_particles,
+	uint b_num_particles
+
 )
 {
 	uint num_threads, num_blocks;
 	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, num_blocks, num_threads);
+	uint b_num_threads, b_num_blocks;
+	compute_grid_size(b_num_particles, MAX_THREAD_NUM, b_num_blocks, b_num_threads);
+
+	// sph-sph density
+	// sph-b density
+	compute_density_d << <num_blocks, num_threads >> > (
+		sph_particles->m_d_density,
+		sph_particles->m_d_mass,
+		sph_particles->m_d_C,
+		boundary_particles->m_d_volume,
+		sph_cell_data,
+		b_cell_data,
+		sph_num_particles
+	);
+	// sph-dem density
+	
+	// boundary density
+	compute_boundary_density_d << <b_num_blocks, b_num_threads >> > (
+		sph_particles->m_d_mass,
+		boundary_particles->m_d_mass,
+		boundary_particles->m_d_volume,
+		boundary_particles->m_d_C,
+		boundary_particles->m_d_density,
+		sph_cell_data,
+		b_cell_data,
+		b_num_particles
+		);
+}
+
+inline void compute_snow_pbf_lambdas(
+	ParticleSet* sph_particles,
+	ParticleSet* dem_particles,
+	ParticleSet* boundary_particles,
+	CellData sph_cell_data,
+	CellData dem_cell_data,
+	CellData b_cell_data,
+	uint sph_num_particles,
+	uint dem_num_particles,
+	uint b_num_particles
+	)
+{
+	uint num_threads, num_blocks;
+	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, num_blocks, num_threads);
+	uint b_num_threads, b_num_blocks;
+	compute_grid_size(b_num_particles, MAX_THREAD_NUM, b_num_blocks, b_num_threads);
+
+	// sph-sph lambdas
+	// sph-b lambdas
+	compute_lambdas_d << <num_blocks, num_threads >> > (
+		sph_particles->m_d_lambda,
+		sph_particles->m_d_C,
+		sph_particles->m_d_mass,
+		boundary_particles->m_d_volume,
+		sph_cell_data,
+		b_cell_data,
+		sph_num_particles
+	);
+	// sph-dem lambdas (ignored if not using dem density)
+	
+	// boundary lambdas
+	compute_boundary_lambdas_d << <b_num_blocks, b_num_threads >> > (
+		boundary_particles->m_d_lambda,
+		boundary_particles->m_d_volume,
+		boundary_particles->m_d_positions,
+		boundary_particles->m_d_C,
+		boundary_particles->m_d_mass,
+		b_cell_data,
+		sph_cell_data,
+		b_num_particles
+		);
+}
+
+inline void compute_snow_pbf_correction(
+	ParticleSet* sph_particles,
+	ParticleSet* dem_particles,
+	ParticleSet* boundary_particles,
+	CellData sph_cell_data,
+	CellData dem_cell_data,
+	CellData b_cell_data,
+	uint sph_num_particles,
+	uint dem_num_particles,
+	uint b_num_particles,
+	float dt
+)
+{
+	uint num_threads, num_blocks;
+	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, num_blocks, num_threads);
+	// sph-sph correction
+	// sph-b correction
+	compute_position_correction <<<num_blocks, num_threads>>>(
+		sph_particles->m_d_lambda,
+		boundary_particles->m_d_lambda,
+		sph_particles->m_d_correction,
+		sph_cell_data,
+		b_cell_data,
+		sph_num_particles,
+		dt
+	);
+	// dem-sph correction (treat dem particles as sph particles) (affected by fluid movment)
+
+}
+
+inline void compute_snow_dem_correction(
+	ParticleSet* sph_particles,
+	ParticleSet* dem_particles,
+	ParticleSet* boundary_particles,
+	CellData sph_cell_data,
+	CellData dem_cell_data,
+	CellData b_cell_data,
+	uint sph_num_particles,
+	uint dem_num_particles,
+	uint b_num_particles
+)
+{
+	uint sph_num_threads, sph_num_blocks;
+	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, sph_num_blocks, sph_num_threads);
+	uint dem_num_threads, dem_num_blocks;
+	compute_grid_size(dem_num_particles, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
+	// dem-dem distance correction
+	// sph-dem distance correction (treat sph particles as dem particles)
+	compute_sph_dem_distance_correction <<<sph_num_blocks, sph_num_threads>>>(
+		sph_particles->m_d_correction,
+		sph_particles->m_d_massInv,
+		dem_particles->m_d_massInv,
+		sph_cell_data,
+		dem_cell_data,
+		sph_num_particles
+	);
+	getLastCudaError("Kernel execution failed: compute_dem_correction ");
+
+	// dem-boundary distance correction
 
 
+	// friction of dem-dem particles
+	// friction of dem-b particles
+	compute_distance_correction << <dem_num_blocks, dem_num_threads >> > (
+		dem_particles->m_d_correction,
+		dem_particles->m_d_massInv,
+		boundary_particles->m_d_massInv,
+		dem_cell_data,
+		b_cell_data,
+		dem_num_particles
+		);
+	getLastCudaError("Kernel execution failed: compute_dem_correction ");
+	
 
 }
 
 void snow_simulation(
+	ParticleSet* sph_particles,
 	ParticleSet* dem_particles, 
-	ParticleSet* sph_particles, 
 	ParticleSet* boundary_particles, 
 	CellData sph_cell_data, 
 	CellData dem_cell_data, 
@@ -2176,10 +2345,140 @@ void snow_simulation(
 	uint sph_num_particles, 
 	uint dem_num_particles, 
 	uint b_num_particles, 
-	float dt
+	float dt,
+	int iterations
 )
 {
-	
+	uint num_threads, num_blocks;
+	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, num_blocks, num_threads);
+	uint dem_num_threads, dem_num_blocks;
+	compute_grid_size(dem_num_particles, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
 
+	for (int i = 0; i < iterations; ++i)
+	{
+		//Search again for stability
+		if (i != 0)
+		{
+			calculate_hash(
+				dem_cell_data,
+				dem_particles->m_d_predict_positions,
+				dem_num_particles
+			);
+			sort_particles(
+				dem_cell_data,
+				dem_num_particles
+			);
+			reorder_data(
+				dem_cell_data,
+				//particles->m_d_positions,
+				dem_particles->m_d_predict_positions,
+				dem_num_particles,
+				(64 * 64 * 64)
+			);
+
+			calculate_hash(
+				sph_cell_data,
+				sph_particles->m_d_predict_positions,
+				sph_num_particles
+				);
+			sort_particles(
+				sph_cell_data,
+				sph_num_particles
+				);
+			reorder_data(
+				sph_cell_data,
+				//particles->m_d_positions,
+				sph_particles->m_d_predict_positions,
+				sph_num_particles,
+				(64 * 64 * 64)
+				);
+		}
+		compute_snow_pbf_density(
+			sph_particles,
+			dem_particles,
+			boundary_particles,
+			sph_cell_data,
+			dem_cell_data,
+			b_cell_data,
+			sph_num_particles,
+			dem_num_particles,
+			b_num_particles
+			);
+
+		compute_snow_pbf_lambdas(
+			sph_particles,
+			dem_particles,
+			boundary_particles,
+			sph_cell_data,
+			dem_cell_data,
+			b_cell_data,
+			sph_num_particles,
+			dem_num_particles,
+			b_num_particles
+			); 
+
+		compute_snow_pbf_correction(
+			sph_particles,
+			dem_particles,
+			boundary_particles,
+			sph_cell_data,
+			dem_cell_data,
+			b_cell_data,
+			sph_num_particles,
+			dem_num_particles,
+			b_num_particles,
+			dt
+			);
+
+		compute_snow_dem_correction(
+			sph_particles,
+			dem_particles,
+			boundary_particles,
+			sph_cell_data,
+			dem_cell_data,
+			b_cell_data,
+			sph_num_particles,
+			dem_num_particles,
+			b_num_particles
+			);
+
+		apply_correction << <num_blocks, num_threads >> > (
+			sph_particles->m_d_new_positions,
+			sph_particles->m_d_predict_positions,
+			sph_particles->m_d_correction,
+			sph_cell_data,
+			sph_num_particles
+		);
+		getLastCudaError("Kernel execution failed: apply_correction ");
+
+		apply_correction << <dem_num_blocks, dem_num_threads >> > (
+			dem_particles->m_d_new_positions,
+			dem_particles->m_d_predict_positions,
+			dem_particles->m_d_correction,
+			dem_cell_data,
+			dem_num_particles
+			);
+		getLastCudaError("Kernel execution failed: apply_correction ");
+	}
+
+	finalize_correction << <num_blocks, num_threads >> > (
+		sph_particles->m_d_positions,
+		sph_particles->m_d_new_positions,
+		sph_particles->m_d_predict_positions,
+		sph_particles->m_d_velocity,
+		sph_num_particles,
+		dt
+	);
+	getLastCudaError("Kernel execution failed: finalize_correction ");
+
+	finalize_correction << <dem_num_blocks, dem_num_threads >> > (
+		dem_particles->m_d_positions,
+		dem_particles->m_d_new_positions,
+		dem_particles->m_d_predict_positions,
+		dem_particles->m_d_velocity,
+		dem_num_particles,
+		dt
+		);
+	getLastCudaError("Kernel execution failed: finalize_correction ");
 
 }

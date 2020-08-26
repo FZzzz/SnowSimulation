@@ -50,8 +50,9 @@ public:
 	uint* m_d_cellEnd;
 	*/
 
-	struct CellData m_d_boundary_cell_data;
 	struct CellData m_d_sph_cell_data;
+	struct CellData m_d_dem_cell_data;
+	struct CellData m_d_boundary_cell_data;
 
 private:
 

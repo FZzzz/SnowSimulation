@@ -6,8 +6,11 @@ Renderer::Renderer() :
 	m_resource_manager(nullptr),
 	m_viewport_width(1600),
 	m_viewport_height(900),
-	m_clear_color(0, 0, 0.35f, 0),
-	m_ubo(-1)
+	m_clear_color(0.15f, 0.15f, 0.15f, 0),
+	m_ubo(-1),
+	m_sph_visibility(true),
+	m_dem_visibility(true),
+	m_boundary_visibility(false)
 {
 }
 
@@ -41,6 +44,21 @@ void Renderer::Render()
 	//RenderObjects();
 	RenderParticles();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void Renderer::SwitchSphVisibility()
+{
+	m_sph_visibility = !m_sph_visibility;
+}
+
+void Renderer::SwitchDEMVisibility()
+{
+	m_dem_visibility = !m_dem_visibility;
+}
+
+void Renderer::SwitchBoundaryVisibility()
+{
+	m_boundary_visibility = !m_boundary_visibility;
 }
 
 
@@ -102,47 +120,72 @@ void Renderer::RenderObjects()
 
 void Renderer::RenderParticles()
 {
-	// fluid particles
-	const ParticleSet* const particles = m_particle_system->getParticles();
-	const std::shared_ptr<Shader> shader = m_resource_manager->FindShaderByName("PointSprite");
-	
-#ifdef _DEBUG
-	assert(shader);
-#endif
-	shader->Use();
 
+	const std::shared_ptr<Shader> shader = m_resource_manager->FindShaderByName("PointSprite");
 	const glm::mat4 pvm = m_mainCamera->m_cameraMat * glm::mat4(1);
 	shader->SetUniformMat4("pvm", pvm);
 	shader->SetUniformFloat("point_size", 30.f);
 	shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
 	shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
 	shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
-	shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 1.f));
-	glBindVertexArray(m_particle_system->getVAO());
-	glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getVBO());
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_particle_system->getEBO());
+	
+	if (m_sph_visibility)
+	{
+		// fluid particles
+		const ParticleSet* const particles = m_particle_system->getSPHParticles();
 
-	glDrawArrays(GL_POINTS, 0, m_particle_system->getParticles()->m_size);
-
-	glBindVertexArray(0);
-
-#ifdef _RENDER_BOUNDARY_
-	// render boundary particles
-	const ParticleSet* const boundary_particles = m_particle_system->getBoundaryParticles();
-
-	shader->SetUniformVec3("point_color", glm::vec3(1.f, 1.f, 1.f));
-
-	glBindVertexArray(m_particle_system->getBoundaryVAO());
-	glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getBoundaryVBO());
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-	glDrawArrays(GL_POINTS, 0, m_particle_system->getBoundaryParticles()->m_size);
-
-	glBindVertexArray(0);
+#ifdef _DEBUG
+		assert(shader);
 #endif
+		shader->Use();
+		shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 1.f));
+		glBindVertexArray(m_particle_system->getVAO());
+		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getVBO());
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_particle_system->getEBO());
+
+		glDrawArrays(GL_POINTS, 0, m_particle_system->getSPHParticles()->m_size);
+
+		glBindVertexArray(0);
+	}
+	if (m_dem_visibility)
+	{
+		// dem particles
+		const ParticleSet* const dem_particles = m_particle_system->getDEMParticles();
+#ifdef _DEBUG
+		assert(shader);
+#endif
+		shader->Use();
+
+		shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 0.35f));
+		glBindVertexArray(m_particle_system->getDEMVAO());
+		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getDEMVBO());
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_particle_system->getEBO());
+
+		glDrawArrays(GL_POINTS, 0, m_particle_system->getDEMParticles()->m_size);
+
+		glBindVertexArray(0);
+	}
+
+	if (m_boundary_visibility)
+	{
+		// render boundary particles
+		const ParticleSet* const boundary_particles = m_particle_system->getBoundaryParticles();
+
+		shader->SetUniformVec3("point_color", glm::vec3(1.f, 1.f, 1.f));
+
+		glBindVertexArray(m_particle_system->getBoundaryVAO());
+		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getBoundaryVBO());
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+		glDrawArrays(GL_POINTS, 0, m_particle_system->getBoundaryParticles()->m_size);
+
+		glBindVertexArray(0);
+	}
 }
 
 void Renderer::RenderGameObject(const std::shared_ptr<Shader>& shader, const std::shared_ptr<Mesh>& mesh, const Transform& transform)

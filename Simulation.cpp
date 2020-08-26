@@ -37,13 +37,17 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_particle_system = particle_system;
 	
 	uint3 grid_size = make_uint3(64, 64, 64);
-	glm::vec3 half_extends = glm::vec3(0.5f, 0.5f, 0.5f);
+	glm::vec3 fluid_half_extends = glm::vec3(0.998f, 0.1f, 0.998f);
+	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
+	glm::vec3 fluid_origin = glm::vec3(0.f, 0.11f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.f, 0.7f, 0.0f);
 	
 	m_neighbor_searcher = std::make_shared<NeighborSearch>(m_particle_system, grid_size);
 	m_solver = std::make_shared<ConstraintSolver>(mode);
 
 	SetupSimParams();
-	GenerateFluidCube(half_extends);
+	GenerateParticleCube(fluid_half_extends, fluid_origin, 0);
+	GenerateParticleCube(snow_half_extends, snow_origin, 1);
 	InitializeBoundaryParticles();
 
 #ifdef _USE_CUDA_
@@ -137,23 +141,28 @@ bool Simulation::StepCUDA(float dt)
 
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 
-	ParticleSet* particles = m_particle_system->getParticles();
+	ParticleSet* sph_particles = m_particle_system->getSPHParticles();
+	ParticleSet* dem_particles = m_particle_system->getDEMParticles();
 	ParticleSet* boundary_particles = m_particle_system->getBoundaryParticles();
 
-	cudaGraphicsResource** vbo_resource = m_particle_system->getCUDAGraphicsResource();
+	cudaGraphicsResource** sph_vbo_resource = m_particle_system->getSPHCUDAGraphicsResource();
+	cudaGraphicsResource** dem_vbo_resource = m_particle_system->getDEMCUDAGraphicsResource();
 	cudaGraphicsResource** b_vbo_resource = m_particle_system->getBoundaryCUDAGraphicsResource();
 	
-	glm::vec3* positions = particles->m_positions.data();
+	glm::vec3* positions = sph_particles->m_positions.data();
 
-	unsigned int numParticles = particles->m_size;
-	unsigned int b_numParticles = boundary_particles->m_size;
+	unsigned int sph_num_particles = sph_particles->m_size;
+	unsigned int dem_num_particles = dem_particles->m_size;
+	unsigned int b_num_particles = boundary_particles->m_size;
 
 	// Map vbo to m_d_positinos
-	cudaGraphicsMapResources(1, vbo_resource, 0);
+	cudaGraphicsMapResources(1, sph_vbo_resource, 0);
+	cudaGraphicsMapResources(1, dem_vbo_resource, 0);
 	cudaGraphicsMapResources(1, b_vbo_resource, 0);
 
 	size_t num_bytes;
-	cudaGraphicsResourceGetMappedPointer((void**)&(particles->m_d_positions), &num_bytes, *vbo_resource);
+	cudaGraphicsResourceGetMappedPointer((void**)&(sph_particles->m_d_positions), &num_bytes, *sph_vbo_resource);
+	cudaGraphicsResourceGetMappedPointer((void**)&(dem_particles->m_d_positions), &num_bytes, *dem_vbo_resource);
 	cudaGraphicsResourceGetMappedPointer((void**)&(boundary_particles->m_d_positions), &num_bytes, *b_vbo_resource);
 	
 	// Integrate
@@ -161,32 +170,73 @@ bool Simulation::StepCUDA(float dt)
 	
 	t1 = std::chrono::high_resolution_clock::now();
 	integrate_pbd(
-		particles,
+		sph_particles,
 		dt,
-		numParticles,
+		sph_num_particles,
 		true
-		);
+	);
 	
+	integrate_pbd(
+		dem_particles,
+		dt,
+		dem_num_particles,
+		true
+	);
+
 	t2 = std::chrono::high_resolution_clock::now();
 	// Neighbor search
 	calculate_hash(
 		m_neighbor_searcher->m_d_sph_cell_data,
-		particles->m_d_predict_positions,
-		numParticles
+		sph_particles->m_d_predict_positions,
+		sph_num_particles
 	);
 	sort_particles(
 		m_neighbor_searcher->m_d_sph_cell_data,
-		numParticles
+		sph_num_particles
 	);
 	reorder_data(
 		m_neighbor_searcher->m_d_sph_cell_data,
 		//particles->m_d_positions,
-		particles->m_d_predict_positions,
-		numParticles,
+		sph_particles->m_d_predict_positions,
+		sph_num_particles,
 		m_neighbor_searcher->m_num_grid_cells
 	);
+
+	// DEM particles
+	calculate_hash(
+		m_neighbor_searcher->m_d_dem_cell_data,
+		dem_particles->m_d_predict_positions,
+		dem_num_particles
+		);
+	sort_particles(
+		m_neighbor_searcher->m_d_dem_cell_data,
+		dem_num_particles
+		);
+	reorder_data(
+		m_neighbor_searcher->m_d_dem_cell_data,
+		//particles->m_d_positions,
+		dem_particles->m_d_predict_positions,
+		dem_num_particles,
+		m_neighbor_searcher->m_num_grid_cells
+		);
+
 	t3 = std::chrono::high_resolution_clock::now();
-	
+
+	snow_simulation(
+		sph_particles,
+		dem_particles,
+		boundary_particles,
+		m_neighbor_searcher->m_d_sph_cell_data,
+		m_neighbor_searcher->m_d_dem_cell_data,
+		m_neighbor_searcher->m_d_boundary_cell_data,
+		sph_num_particles,
+		dem_num_particles,
+		b_num_particles,
+		dt,
+		m_iterations
+		);
+
+	/*
 	solve_pbd_dem(
 		particles,
 		boundary_particles,
@@ -197,15 +247,16 @@ bool Simulation::StepCUDA(float dt)
 		dt,
 		m_iterations
 	);
+	*/
 	
 	/*
 	solve_sph_fluid(
-		particles,
+		sph_particles,
 		m_neighbor_searcher->m_d_sph_cell_data,
-		numParticles,
+		sph_num_particles,
 		boundary_particles,
 		m_neighbor_searcher->m_d_boundary_cell_data,
-		b_numParticles,
+		b_num_particles,
 		dt,
 		m_iterations
 	);
@@ -221,7 +272,8 @@ bool Simulation::StepCUDA(float dt)
 	}
 	
 	// Unmap CUDA buffer object
-	cudaGraphicsUnmapResources(1, vbo_resource, 0);
+	cudaGraphicsUnmapResources(1, sph_vbo_resource, 0);
+	cudaGraphicsUnmapResources(1, dem_vbo_resource, 0);
 	cudaGraphicsUnmapResources(1, b_vbo_resource, 0);
 	//m_pause = true;
 
@@ -259,7 +311,7 @@ void Simulation::SetSolverIteration(uint32_t iter_count)
 void Simulation::ComputeRestDensity()
 {
 	const float effective_radius = 1.f;
-	ParticleSet* const particles = m_particle_system->getParticles();
+	ParticleSet* const particles = m_particle_system->getSPHParticles();
 
 	m_rest_density = 0;
 	
@@ -331,13 +383,13 @@ void Simulation::SetupSimParams()
 	m_sim_params->num_cells = m_neighbor_searcher->m_num_grid_cells;
 	m_sim_params->world_origin = make_float3(0, 0, 0);
 	m_sim_params->cell_size = make_float3(m_sim_params->effective_radius);
-	m_sim_params->boundary_damping = 0.98f;
+	m_sim_params->boundary_damping = 0.01f;
 	
 	// ice friction at -12 C
 	m_sim_params->static_friction = 1.0f;
 	m_sim_params->kinematic_friction = 0.75f;
 
-	m_sim_params->sor_coeff = 0.5f;
+	m_sim_params->sor_coeff = 0.33;
 
 	m_particle_system->setParticleRadius(particle_radius);
 	setParams(m_sim_params);
@@ -514,7 +566,7 @@ void Simulation::InitializeBoundaryCudaData()
 	cudaGraphicsUnmapResources(1, vbo_resource, 0);
 }
 
-void Simulation::GenerateFluidCube(glm::vec3 half_extends)
+void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, int opt)
 {
 	std::srand(time(NULL));
 	// diameter of particle
@@ -532,7 +584,14 @@ void Simulation::GenerateFluidCube(glm::vec3 half_extends)
 	//const float diameter = 0.5f;
 
 	size_t n_particles = 8 * nx * ny * nz;
-	ParticleSet* particles = m_particle_system->AllocateParticles(n_particles, m_particle_mass);
+	ParticleSet* particles = nullptr;
+	if (opt == 0)
+		particles = m_particle_system->AllocateSPHParticles(n_particles, m_particle_mass);
+	else if (opt == 1)
+		particles = m_particle_system->AllocateDEMParticles(n_particles, m_particle_mass);
+	else
+		return;
+	
 
 	std::cout << "n_particles: " << n_particles << std::endl;
 	// set positions
@@ -548,9 +607,9 @@ void Simulation::GenerateFluidCube(glm::vec3 half_extends)
 				float z_jitter = 0.001f * diameter * static_cast<float>(rand() % 3);
 
 				//int idx = k + j * 10 + i * 100;
-				x = 0.0f + diameter * static_cast<float>(i) +x_jitter;
-				y = 0.55f + diameter * static_cast<float>(j) +y_jitter;
-				z = 0.0f + diameter * static_cast<float>(k) +z_jitter;
+				x = origin.x + diameter * static_cast<float>(i) +x_jitter;
+				y = origin.y + diameter * static_cast<float>(j) +y_jitter;
+				z = origin.z + diameter * static_cast<float>(k) +z_jitter;
 				glm::vec3 pos(x, y, z);
 				particles->m_positions[idx] = pos;
 				particles->m_new_positions[idx] = pos;
@@ -563,6 +622,7 @@ void Simulation::GenerateFluidCube(glm::vec3 half_extends)
 
 }
 
+
 void Simulation::PredictPositions(float dt)
 {
 	/*
@@ -570,7 +630,7 @@ void Simulation::PredictPositions(float dt)
 	 * 1. forall vertices i do v_i = v_i + dt * w_i * f_{ext}
 	 * 2. damp velocities 	
 	 */
-	ParticleSet* particles = m_particle_system->getParticles();
+	ParticleSet* particles = m_particle_system->getSPHParticles();
 
 #pragma omp parallel default(shared) num_threads(8)
 	{
@@ -602,7 +662,7 @@ void Simulation::ComputeDensity(float effective_radius)
 		ImGui::End();
 	}
 	*/
-	ParticleSet* const particles = m_particle_system->getParticles();
+	ParticleSet* const particles = m_particle_system->getSPHParticles();
 
 	#pragma omp parallel default(shared) num_threads(8)
 	{
@@ -631,7 +691,7 @@ void Simulation::ComputeLambdas(float effective_radius)
 {
 	const float epsilon = 1.0e-6f;
 	/* Compute density constraints */
-	ParticleSet* const particles = m_particle_system->getParticles();
+	ParticleSet* const particles = m_particle_system->getSPHParticles();
 
 	#pragma omp parallel default(shared) num_threads(8)
 	{
@@ -668,7 +728,7 @@ void Simulation::ComputeLambdas(float effective_radius)
 
 void Simulation::ComputeSPHParticlesCorrection(float effective_radius, float dt)
 {
-	ParticleSet* const particles = m_particle_system->getParticles();
+	ParticleSet* const particles = m_particle_system->getSPHParticles();
 
 	#pragma omp parallel default(shared) num_threads(8)
 	{
@@ -701,7 +761,7 @@ void Simulation::ComputeSPHParticlesCorrection(float effective_radius, float dt)
 
 void Simulation::UpdatePredictPosition()
 {
-	ParticleSet* const particles = m_particle_system->getParticles();
+	ParticleSet* const particles = m_particle_system->getSPHParticles();
 	for (size_t i = 0; i < particles->m_size; ++i)
 	{
 		particles->m_predict_positions[i] = particles->m_new_positions[i];
@@ -716,7 +776,7 @@ void Simulation::CollisionDetection(float dt)
 		vec.clear();
 	}
 
-	ParticleSet* const particles = m_particle_system->getParticles();
+	ParticleSet* const particles = m_particle_system->getSPHParticles();
 	for (size_t i = 0; i < particles->m_size; ++i)
 	{
 		for (size_t j = 0; j < m_colliders.size(); ++j)
@@ -774,6 +834,6 @@ void Simulation::AddCollisionConstraint(Constraint* constraint)
 
 void Simulation::ApplySolverResults(float dt)
 {
-	m_particle_system->getParticles()->Update(dt);
+	m_particle_system->getSPHParticles()->Update(dt);
 	m_particle_system->Update();
 }
