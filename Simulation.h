@@ -21,31 +21,27 @@ struct SimWorldDesc
 
 struct SimParams
 {
-	float3 collider_pos;
-	float  collider_radius;
-
 	float3 gravity;
-	float global_damping;
-	float effective_radius;
-	float particle_radius;
-	float epsilon;
- 
-	uint3 grid_size;
-	uint num_cells;
+	float  global_damping;
+	
+	// pbf sph coeffcient
+	float  epsilon;
+	float  effective_radius;
+	float  particle_radius;
+	float  rest_density;
+
+	// dem coefficient
+	float  boundary_damping;
+	float  static_friction;
+	float  kinematic_friction;
+
+	float  sor_coeff;
+
 	float3 world_origin;
 	float3 cell_size;
 
-	float spring;
-	float damping;
-	float shear;
-	float attraction;
-	float boundary_damping;
-
-	float static_friction;
-	float kinematic_friction;
-
-	float volume;
-	float sor_coeff;
+	uint3  grid_size;
+	uint   num_cells;
 };
 
 class Simulation
@@ -112,7 +108,6 @@ private:
 	SimParams* m_sim_params;
 	SimParams* m_d_sim_params;
 	float m_rest_density;
-	float* m_d_rest_density;
 	float m_volume;
 	float m_particle_mass;
 	

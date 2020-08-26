@@ -57,12 +57,6 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	
 	m_initialized = true;
 	
-#ifdef _USE_CUDA_
-	cudaMalloc((void**)&m_d_rest_density, sizeof(float));
-	cudaMemcpy((void*)m_d_rest_density, (void*)&m_rest_density, sizeof(float), cudaMemcpyHostToDevice);
-#endif
-
-
 }
 
 /*
@@ -206,7 +200,6 @@ bool Simulation::StepCUDA(float dt)
 	
 	/*
 	solve_sph_fluid(
-		m_d_rest_density,
 		particles,
 		m_neighbor_searcher->m_d_sph_cell_data,
 		numParticles,
@@ -332,15 +325,12 @@ void Simulation::SetupSimParams()
 	m_sim_params->global_damping = 1.f;
 	m_sim_params->particle_radius = particle_radius;
 	m_sim_params->effective_radius = effective_radius;
+	m_sim_params->rest_density = m_rest_density;
 	m_sim_params->epsilon = 100.f;
 	m_sim_params->grid_size = m_neighbor_searcher->m_grid_size;
 	m_sim_params->num_cells = m_neighbor_searcher->m_num_grid_cells;
 	m_sim_params->world_origin = make_float3(0, 0, 0);
 	m_sim_params->cell_size = make_float3(m_sim_params->effective_radius);
-	m_sim_params->spring = 0.5f;
-	m_sim_params->damping = 0.02f;
-	m_sim_params->shear = 0.1f;
-	m_sim_params->attraction = 0.0f;
 	m_sim_params->boundary_damping = 0.98f;
 	
 	// ice friction at -12 C

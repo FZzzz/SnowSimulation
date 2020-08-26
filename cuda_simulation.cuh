@@ -50,21 +50,7 @@ void compute_boundary_volume(
     uint numParticles
 );
 
-
-void solve_dem_collision(
-    float3* newVel,
-    float3* sortedPos,
-    float3* sortedVel,
-    uint* gridParticleIndex,
-    uint* cellStart,
-    uint* cellEnd,
-    uint   numParticles,
-    uint   numCells,
-    float dt  
-);
-
 void solve_sph_fluid(
-    float*          rest_density,
     ParticleSet*    sph_particles,
     CellData		sph_cell_data,
     uint			numParticles,
@@ -105,6 +91,19 @@ void solve_sph_dem(
     CellData     dem_cell_data,
     uint         num_sph_particles,
     uint         num_dem_particles,
+    float        dt
+);
+
+void snow_simulation(
+    ParticleSet* dem_particles,
+    ParticleSet* sph_particles,
+    ParticleSet* boundary_particles,
+    CellData     sph_cell_data,
+    CellData     dem_cell_data,
+    CellData     b_cell_data,
+    uint         sph_num_particles,
+    uint         dem_num_particles,
+    uint         b_num_particles,
     float        dt
 );
 
