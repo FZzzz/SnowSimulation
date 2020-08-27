@@ -39,15 +39,15 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	uint3 grid_size = make_uint3(64, 64, 64);
 	glm::vec3 fluid_half_extends = glm::vec3(0.998f, 0.1f, 0.998f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
-	glm::vec3 fluid_origin = glm::vec3(0.f, 0.11f, 0.0f);
-	glm::vec3 snow_origin = glm::vec3(0.f, 0.27f, 0.0f);
+	glm::vec3 fluid_origin = glm::vec3(0.0f, 0.115f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.f, 0.7f, 0.0f);
 	
 	m_neighbor_searcher = std::make_shared<NeighborSearch>(m_particle_system, grid_size);
 	m_solver = std::make_shared<ConstraintSolver>(mode);
 
 	SetupSimParams();
-	GenerateParticleCube(fluid_half_extends, fluid_origin, 0);
-	GenerateParticleCube(snow_half_extends, snow_origin, 1);
+	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, false);
+	GenerateParticleCube(snow_half_extends, snow_origin, 1, true);
 	InitializeBoundaryParticles();
 
 #ifdef _USE_CUDA_
@@ -383,13 +383,13 @@ void Simulation::SetupSimParams()
 	m_sim_params->num_cells = m_neighbor_searcher->m_num_grid_cells;
 	m_sim_params->world_origin = make_float3(0, 0, 0);
 	m_sim_params->cell_size = make_float3(m_sim_params->effective_radius);
-	m_sim_params->boundary_damping = 0.01f;
+	m_sim_params->boundary_damping = 0.99f;
 	
 	// ice friction at -12 C
 	m_sim_params->static_friction = 1.0f;
 	m_sim_params->kinematic_friction = 0.75f;
 
-	m_sim_params->sor_coeff = 0.33f;
+	m_sim_params->sor_coeff = 0.25f;
 
 	m_particle_system->setParticleRadius(particle_radius);
 	setParams(m_sim_params);
@@ -566,7 +566,7 @@ void Simulation::InitializeBoundaryCudaData()
 	cudaGraphicsUnmapResources(1, vbo_resource, 0);
 }
 
-void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, int opt)
+void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, int opt, bool use_jitter=false)
 {
 	std::srand(time(NULL));
 	// diameter of particle
@@ -602,14 +602,20 @@ void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, 
 		{
 			for (int k = -nz; k < nz; ++k)
 			{
-				float x_jitter = 0.001f * diameter * static_cast<float>(rand() % 3);
-				float y_jitter = 0.001f * diameter * static_cast<float>(rand() % 3);
-				float z_jitter = 0.001f * diameter * static_cast<float>(rand() % 3);
+				x = origin.x + diameter * static_cast<float>(i);
+				y = origin.y + diameter * static_cast<float>(j);
+				z = origin.z + diameter * static_cast<float>(k);
 
-				//int idx = k + j * 10 + i * 100;
-				x = origin.x + diameter * static_cast<float>(i) +x_jitter;
-				y = origin.y + diameter * static_cast<float>(j) +y_jitter;
-				z = origin.z + diameter * static_cast<float>(k) +z_jitter;
+				if (use_jitter)
+				{
+					float x_jitter = 0.001f * diameter * static_cast<float>(rand() % 3);
+					float y_jitter = 0.001f * diameter * static_cast<float>(rand() % 3);
+					float z_jitter = 0.001f * diameter * static_cast<float>(rand() % 3);
+					x += x_jitter;
+					y += y_jitter;
+					z += z_jitter;
+				}
+
 				glm::vec3 pos(x, y, z);
 				particles->m_positions[idx] = pos;
 				particles->m_new_positions[idx] = pos;

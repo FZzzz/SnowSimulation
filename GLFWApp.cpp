@@ -217,11 +217,10 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 
 	// Simulation control settings
 	{
-		uint32_t iterations = 2;
-		int clip_length = 2000;
+		uint32_t iterations = 10;
+		int clip_length = 200000;
 		m_simulator->SetSolverIteration(iterations);
 		m_simulator->setClipLength(clip_length);
-
 	}
 
 	return true;

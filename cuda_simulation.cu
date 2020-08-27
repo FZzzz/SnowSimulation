@@ -470,7 +470,7 @@ float pbf_density_0(
 	float3  pos,
 	float*	mass,
 	CellData cell_data
-) // type: 0->fluid fluid 1->boundary boundary 
+)  
 {
 	uint grid_hash = calcGridHash(grid_pos);
 
@@ -2678,6 +2678,7 @@ void compute_dem_sph_lambdas_d(
 	float3*  dem_pos,
 	float*   dem_C,
 	float*   dem_mass,
+	float*	 b_volume,
 	// Cell data of fluid particles
 	CellData sph_cell_data,
 	CellData dem_cell_data,
@@ -2752,11 +2753,13 @@ void compute_dem_sph_lambdas_d(
 			for (int x = -1; x <= 1; x++)
 			{
 				int3 neighbor_pos = gridPos + make_int3(x, y, z);
-				float res = pbf_boundary_lambda(
+				float res = pbf_lambda_boundary(
 					neighbor_pos,
 					pos,
-					b_cell_data
-				);
+					dem_mass[originalIndex],  // paritcle_mass
+					b_cell_data,
+					b_volume
+					);
 				gradientC_sum += res;
 			}
 		}
@@ -2911,6 +2914,7 @@ inline void compute_snow_pbf_lambdas(
 		dem_particles->m_d_positions,
 		dem_particles->m_d_C,
 		dem_particles->m_d_mass,
+		boundary_particles->m_d_volume,
 		sph_cell_data,
 		dem_cell_data,
 		b_cell_data,
@@ -2958,7 +2962,7 @@ bool sphere_cd_coupling(
 			float dist = length(v);
 
 			// correct if distance is close
-			if (dist <= 2.f * params.particle_radius)
+			if (dist <= params.effective_radius)
 			{
 				return true;
 			}
@@ -3020,8 +3024,8 @@ void compute_snow_sph_position_correction(
 		}
 	}
 
-	/*
-	//sph-dem
+	
+	//sph-dem is corrected by non-penetration constraint
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -3041,7 +3045,8 @@ void compute_snow_sph_position_correction(
 			}
 		}
 	}
-	*/
+	
+	
 
 	// sph-boundary
 	for (int z = -1; z <= 1; z++)
@@ -3156,32 +3161,34 @@ void compute_dem_sph_position_correction(
 				}
 			}
 		}
-		/*
-		// dem-boundary
-		for (int z = -1; z <= 1; z++)
+		
+	}
+
+	// dem-boundary is corrected by non penetration constraint
+	for (int z = -1; z <= 1; z++)
+	{
+		for (int y = -1; y <= 1; y++)
 		{
-			for (int y = -1; y <= 1; y++)
+			for (int x = -1; x <= 1; x++)
 			{
-				for (int x = -1; x <= 1; x++)
-				{
-					int3 neighbor_pos = gridPos + make_int3(x, y, z);
-					corr += pbf_correction_boundary(
-						neighbor_pos,
-						index,
-						pos,
-						lambda_i,
-						b_cell_data,
-						b_lambda,
-						dt
+				int3 neighbor_pos = gridPos + make_int3(x, y, z);
+				corr += pbf_correction_boundary(
+					neighbor_pos,
+					index,
+					pos,
+					lambda_i,
+					b_cell_data,
+					b_lambda,
+					dt
 					);
-				}
 			}
 		}
-		*/
-
-		corr = (1.f / params.rest_density) * corr;
-		dem_correction[originalIndex] += corr;
 	}
+
+
+
+	corr = (1.f / params.rest_density) * corr;
+	dem_correction[originalIndex] += corr;
 }
 
 
@@ -3216,7 +3223,7 @@ inline void compute_snow_pbf_correction(
 		sph_num_particles,
 		dt
 	);
-	
+	 
 	/*
 	// dem-sph correction (treat dem particles as sph particles) (affected by fluid movment)
 	compute_dem_sph_position_correction << <dem_num_blocks, dem_num_threads >> > (
@@ -3231,6 +3238,7 @@ inline void compute_snow_pbf_correction(
 		dt
 	);
 	*/
+	
 
 }
 
@@ -3250,7 +3258,7 @@ inline void compute_snow_dem_correction(
 	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, sph_num_blocks, sph_num_threads);
 	uint dem_num_threads, dem_num_blocks;
 	compute_grid_size(dem_num_particles, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
-	// dem-dem distance correction
+	
 	// sph-dem distance correction (treat sph particles as dem particles)
 	compute_sph_dem_distance_correction <<<sph_num_blocks, sph_num_threads>>>(
 		sph_particles->m_d_correction,
@@ -3261,6 +3269,7 @@ inline void compute_snow_dem_correction(
 		sph_num_particles
 	);
 	getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
+	
 	/*
 	//dem-sph distance correction
 	compute_sph_dem_distance_correction << <dem_num_blocks, dem_num_threads >> > (
@@ -3273,11 +3282,9 @@ inline void compute_snow_dem_correction(
 	);
 	getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
 	*/
+
+	// dem-dem distance correction
 	// dem-boundary distance correction
-
-
-	// friction of dem-dem particles
-	// friction of dem-b particles
 	compute_distance_correction << <dem_num_blocks, dem_num_threads >> > (
 		dem_particles->m_d_correction,
 		dem_particles->m_d_massInv,
@@ -3461,7 +3468,16 @@ void snow_simulation(
 		b_cell_data,
 		dem_num_particles
 		);
+	apply_correction << <dem_num_blocks, dem_num_threads >> > (
+		dem_particles->m_d_new_positions,
+		dem_particles->m_d_predict_positions,
+		dem_particles->m_d_correction,
+		dem_cell_data,
+		dem_num_particles
+		);
+	getLastCudaError("Kernel execution failed: apply_correction ");
 
+	// finialize corrections and compute velocity for next integration 
 	finalize_correction << <sph_num_blocks, sph_num_threads >> > (
 		sph_particles->m_d_positions,
 		sph_particles->m_d_new_positions,
