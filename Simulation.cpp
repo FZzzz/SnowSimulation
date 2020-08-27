@@ -40,7 +40,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	glm::vec3 fluid_half_extends = glm::vec3(0.998f, 0.1f, 0.998f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
 	glm::vec3 fluid_origin = glm::vec3(0.f, 0.11f, 0.0f);
-	glm::vec3 snow_origin = glm::vec3(0.f, 0.7f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.f, 0.27f, 0.0f);
 	
 	m_neighbor_searcher = std::make_shared<NeighborSearch>(m_particle_system, grid_size);
 	m_solver = std::make_shared<ConstraintSolver>(mode);
@@ -389,7 +389,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->static_friction = 1.0f;
 	m_sim_params->kinematic_friction = 0.75f;
 
-	m_sim_params->sor_coeff = 0.33;
+	m_sim_params->sor_coeff = 0.33f;
 
 	m_particle_system->setParticleRadius(particle_radius);
 	setParams(m_sim_params);
