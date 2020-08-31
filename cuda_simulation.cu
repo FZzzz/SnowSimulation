@@ -2367,7 +2367,7 @@ void compute_snow_dem_sph_density_d(
 			}
 		}
 	}
-
+	//printf("dem_mass: %f\n", dem_mass[originalIndex]);
 	// dem-sph
 	for (int z = -1; z <= 1; z++)
 	{
@@ -3242,7 +3242,7 @@ inline void compute_snow_pbf_correction(
 
 }
 
-inline void compute_snow_dem_correction(
+inline void compute_snow_distance_correction(
 	ParticleSet* sph_particles,
 	ParticleSet* dem_particles,
 	ParticleSet* boundary_particles,
@@ -3271,7 +3271,7 @@ inline void compute_snow_dem_correction(
 	getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
 	
 	/*
-	//dem-sph distance correction
+	//dem-sph distance correction (reversed parameters for the same function)
 	compute_sph_dem_distance_correction << <dem_num_blocks, dem_num_threads >> > (
 		dem_particles->m_d_correction,
 		dem_particles->m_d_massInv,
@@ -3393,7 +3393,7 @@ void snow_simulation(
 			dt
 			);
 
-		compute_snow_dem_correction(
+		compute_snow_distance_correction(
 			sph_particles,
 			dem_particles,
 			boundary_particles,

@@ -39,8 +39,8 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	uint3 grid_size = make_uint3(64, 64, 64);
 	glm::vec3 fluid_half_extends = glm::vec3(0.998f, 0.1f, 0.998f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
-	glm::vec3 fluid_origin = glm::vec3(0.0f, 0.115f, 0.0f);
-	glm::vec3 snow_origin = glm::vec3(0.f, 0.7f, 0.0f);
+	glm::vec3 fluid_origin = glm::vec3(0.0f, 0.205f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.f, 1.0f, 0.0f);
 	
 	m_neighbor_searcher = std::make_shared<NeighborSearch>(m_particle_system, grid_size);
 	m_solver = std::make_shared<ConstraintSolver>(mode);
@@ -137,7 +137,7 @@ bool Simulation::StepCUDA(float dt)
 	if (m_pause)
 		return true;
 
-	bool cd_on = false;
+	bool cd_on = true;
 
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 
@@ -167,20 +167,20 @@ bool Simulation::StepCUDA(float dt)
 	
 	// Integrate
 	//integrate(particles->m_d_positions, particles->m_d_velocity, dt, particles->m_size);
-	
+
 	t1 = std::chrono::high_resolution_clock::now();
 	integrate_pbd(
 		sph_particles,
 		dt,
 		sph_num_particles,
-		true
+		cd_on
 	);
 	
 	integrate_pbd(
 		dem_particles,
 		dt,
 		dem_num_particles,
-		true
+		cd_on
 	);
 
 	t2 = std::chrono::high_resolution_clock::now();
@@ -359,7 +359,8 @@ void Simulation::SetupSimParams()
 	const float n_kernel_particles = 20.f;	
 	// water density = 1000 kg/m^3
 	m_rest_density = 1000.f; 
-	m_particle_mass = particle_mass;
+	m_sph_particle_mass = particle_mass;
+	m_dem_particle_mass = 1.5f * particle_mass;
 
 	float effective_radius, particle_radius;
 	
@@ -383,7 +384,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->num_cells = m_neighbor_searcher->m_num_grid_cells;
 	m_sim_params->world_origin = make_float3(0, 0, 0);
 	m_sim_params->cell_size = make_float3(m_sim_params->effective_radius);
-	m_sim_params->boundary_damping = 0.99f;
+	m_sim_params->boundary_damping = 0.35f;
 	
 	// ice friction at -12 C
 	m_sim_params->static_friction = 1.0f;
@@ -403,13 +404,12 @@ void Simulation::InitializeBoundaryParticles()
 	int nx, ny, nz;
 	//size_t n_particles = 0;
 	// fluid cube extends
-	glm::vec3 half_extend1(1.0f, diameter * static_cast<float>(thickness), 1.0f);
-	glm::vec3 half_extend2(diameter * static_cast<float>(thickness), 1.0f, 1.0f);
-	glm::vec3 half_extend3(1.0f, 1.0f, diameter * static_cast<float>(thickness));
+	glm::vec3 half_extend1(1.0f, diameter * static_cast<float>(thickness)/2.f, 1.0f);
+	glm::vec3 half_extend2(diameter * static_cast<float>(thickness)/2.f, 1.0f, 1.0f);
+	glm::vec3 half_extend3(1.0f, 1.0f, diameter * static_cast<float>(thickness)/2.f);
 	
 	// Initialize boundary particles
 	ParticleSet* particles = m_particle_system->AllocateBoundaryParticles();
-
 
 	// Initialize positions
 	float x, y, z;
@@ -422,13 +422,13 @@ void Simulation::InitializeBoundaryParticles()
 
 	// buttom
 	float left_margin = INFINITY, right_margin = -INFINITY;
-	glm::vec3 buttom_origin(0, 0, 0);
+	glm::vec3 buttom_origin(0, -0.5f*diameter, 0);
 
-	for (int i = -nx; i < nx; ++i)
+	for (int i = -nx-thickness; i < nx+thickness; ++i)
 	{
 		for (int j = 0; j < thickness; ++j)
 		{
-			for (int k = -nz; k < nz; ++k)
+			for (int k = -nz-thickness; k < nz+thickness; ++k)
 			{
 				//int idx = k + j * 10 + i * 100;
 				x = buttom_origin.x + diameter * static_cast<float>(i);
@@ -459,12 +459,12 @@ void Simulation::InitializeBoundaryParticles()
 
 	for (int i = 0; i < thickness; ++i)
 	{
-		for (int j = -ny; j < ny; ++j)
+		for (int j = -ny - thickness; j < ny; ++j)
 		{
-			for (int k = -nz; k < nz; ++k)
+			for (int k = -nz-thickness; k < nz+thickness; ++k)
 			{
 				// left
-				x = diameter * static_cast<float>(i);
+				x = -diameter * static_cast<float>(i);
 				y = diameter * static_cast<float>(j);
 				z = diameter * static_cast<float>(k);
 				glm::vec3 pos(x, y, z);
@@ -472,17 +472,15 @@ void Simulation::InitializeBoundaryParticles()
 				positions.push_back(pos);
 				idx++;
 
-				// right
+				// right	
 				x = diameter * static_cast<float>(i);
-				y = diameter * static_cast<float>(j);
-				z = diameter * static_cast<float>(k);
 				pos = glm::vec3(x, y, z);
 				pos += right_origin;
 				positions.push_back(pos);
 				idx++;
 
-				if (z < back_margin) back_margin = z;
-				if (z > front_margin) front_margin = z;
+				if (pos.z < back_margin) back_margin = pos.z;
+				if (pos.z > front_margin) front_margin = pos.z;
 
 			}
 		}
@@ -498,24 +496,22 @@ void Simulation::InitializeBoundaryParticles()
 	// back && front boundary
 	glm::vec3 back_origin(0, ny * diameter, back_margin);
 	glm::vec3 front_origin(0, ny* diameter, front_margin);
-	for (int i = -nx; i < nx; ++i)
+	for (int i = -nx-2*thickness; i < nx+2*thickness; ++i)
 	{
-		for (int j = -ny; j < ny; ++j)
+		for (int j = -ny-thickness; j < ny; ++j)
 		{
 			for (int k = 0; k < thickness; ++k)
 			{
-				// left
+				// back
 				x = diameter * static_cast<float>(i);
 				y = diameter * static_cast<float>(j);
-				z = diameter * static_cast<float>(k);
+				z = -diameter * static_cast<float>(k);
 				glm::vec3 pos(x, y, z);
 				pos += back_origin;
 				positions.push_back(pos);
 				idx++;
 
-				// right
-				x = diameter * static_cast<float>(i);
-				y = diameter * static_cast<float>(j);
+				// front
 				z = diameter * static_cast<float>(k);
 				pos = glm::vec3(x, y, z);
 				pos += front_origin;
@@ -526,7 +522,7 @@ void Simulation::InitializeBoundaryParticles()
 	}
 
 	std::cout << "Boundary particles: " << idx << std::endl;
-	particles->ResetPositions(positions, m_particle_mass);
+	particles->ResetPositions(positions, m_sph_particle_mass);
 
 }
 
@@ -585,10 +581,13 @@ void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, 
 
 	size_t n_particles = 8 * nx * ny * nz;
 	ParticleSet* particles = nullptr;
+
+	// 0: sph particles
+	// 1: dem particles
 	if (opt == 0)
-		particles = m_particle_system->AllocateSPHParticles(n_particles, m_particle_mass);
+		particles = m_particle_system->AllocateSPHParticles(n_particles, m_sph_particle_mass);
 	else if (opt == 1)
-		particles = m_particle_system->AllocateDEMParticles(n_particles, m_particle_mass);
+		particles = m_particle_system->AllocateDEMParticles(n_particles, m_dem_particle_mass);
 	else
 		return;
 	

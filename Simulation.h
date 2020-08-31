@@ -109,7 +109,8 @@ private:
 	SimParams* m_d_sim_params;
 	float m_rest_density;
 	float m_volume;
-	float m_particle_mass;
+	float m_dem_particle_mass;
+	float m_sph_particle_mass;
 	
 	std::shared_ptr<ConstraintSolver> m_solver;
 	std::shared_ptr<ParticleSystem> m_particle_system;
