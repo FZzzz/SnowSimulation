@@ -216,7 +216,6 @@
     <ClInclude Include="Shader.h" />
     <ClInclude Include="Simulation.h" />
     <ClInclude Include="SPHKernel.h" />
-    <ClInclude Include="sph_kernel.cuh" />
     <ClInclude Include="Transform.h" />
     <ClInclude Include="util.h" />
   </ItemGroup>

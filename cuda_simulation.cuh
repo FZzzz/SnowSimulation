@@ -12,9 +12,9 @@
 // simulation parameters
 __constant__ SimParams params;
 
-void allocateArray(void** devPtr, size_t size);
+void allocate_array(void** devPtr, size_t size);
 
-void setParams(SimParams* param_in);
+void set_sim_params(SimParams* param_in);
 
 void integrate_pbd(
     ParticleSet* particles,

@@ -36,13 +36,20 @@ struct SimParams
 	float  kinematic_friction;
 
 	float  sor_coeff;
+	float  viscosity;
 
 	float3 world_origin;
 	float3 cell_size;
 
 	uint3  grid_size;
 	uint   num_cells;
+
+	float poly6;
+	float poly6_G;
+	float spiky;
+	float spiky_G;
 };
+
 
 class Simulation
 {
@@ -106,7 +113,6 @@ private:
 
 	/*fluid data*/
 	SimParams* m_sim_params;
-	SimParams* m_d_sim_params;
 	float m_rest_density;
 	float m_volume;
 	float m_dem_particle_mass;

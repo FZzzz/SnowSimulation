@@ -233,9 +233,6 @@
     <ClInclude Include="cuda_simulation.cuh">
       <Filter>CUDA Files</Filter>
     </ClInclude>
-    <ClInclude Include="sph_kernel.cuh">
-      <Filter>CUDA Files</Filter>
-    </ClInclude>
     <ClInclude Include="imgui\imconfig.h">
       <Filter>Header Files\Engine\imgui</Filter>
     </ClInclude>

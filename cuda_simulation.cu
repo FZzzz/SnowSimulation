@@ -11,11 +11,108 @@
 #include <thrust/sort.h>
 #include <cooperative_groups.h>
 #include "cuda_simulation.cuh"
-#include "sph_kernel.cuh"
 #include <chrono>
 #include "imgui/imgui.h"
 
+#define NUM_CELLS 262144
+
 namespace cg = cooperative_groups;
+
+/*SPH Kernels*/
+inline __device__ float sph_kernel_Poly6_W_CUDA(float distance, float effective_radius)
+{
+	if (distance >= 0 && distance <= effective_radius)
+	{
+		const float h = effective_radius;
+		const float d = distance;
+
+		float h2 = h * h;
+		//float h9 = pow(h, 9);
+		float d2 = d * d;
+		float q = h2 - d2;
+		float q3 = q * q * q;
+
+		//float result = (315.0f / (64.0f * CUDART_PI * h9)) * q3;
+		float result = params.poly6 * q3;
+
+		return result;
+	}
+	else
+	{
+		return 0.0f;
+	}
+}
+
+inline __device__ float3 sph_kernel_Poly6_W_Gradient_CUDA(float3 diff, float distance, float effective_radius)
+{
+	if (distance >= 0 && distance <= effective_radius)
+	{
+		const float h = effective_radius;
+
+		float h2 = h * h;
+		//float h9 = pow(h, 9);
+		float d2 = distance * distance;
+		float  q = h2 - d2;
+		float q2 = q * q;
+
+		//float scalar = (-945.0f / (32.0f * CUDART_PI * h9));
+		float scalar = params.poly6_G;
+		scalar = scalar * q2;
+		float3 result = scalar * make_float3(diff.x, diff.y, diff.z);
+
+		return result;
+	}
+	else
+	{
+		return make_float3(0, 0, 0);
+	}
+}
+
+
+inline __device__ float sph_kernel_Spiky_W_CUDA(float distance, float effective_radius)
+{
+	if (distance >= 0 && distance <= effective_radius)
+	{
+		const float h = effective_radius;
+		const float d = distance;
+
+		//float h6 = pow(h, 6);
+		float q = h - d;
+		float q3 = q * q * q;
+
+		//float result = ((15.0f / (CUDART_PI * h6)) * q3);
+		float result = params.spiky * q3;
+
+		return result;
+	}
+	else
+	{
+		return 0.0f;
+	}
+}
+
+
+inline __device__ float3 sph_kernel_Spiky_W_Gradient_CUDA(float3 diff, float distance, float effective_radius)
+{
+	if (distance >= 0 && distance <= effective_radius)
+	{
+		const float h = effective_radius;
+		//float h6 = pow(h, 6);
+		float q = h - distance;
+		float q2 = q * q;
+
+		//float scalar = (-45.0f / (CUDART_PI*h6)) * (q2 / distance);
+		float scalar = params.spiky_G * (q2 / distance);
+		float3 result = scalar * make_float3(diff.x, diff.y, diff.z);
+
+		return result;
+	}
+	else
+	{
+		return make_float3(0, 0, 0);
+	}
+}
+
 
 // calculate position in uniform grid
 inline __device__ int3 calcGridPos(float3 p)
@@ -63,7 +160,7 @@ float sph_boundary_volume(
 				float3 pos2 = data.sorted_pos[j];
 				float3 vec = pos1 - pos2;
 				float dist = length(vec);
-				rho += mass[original_index] * Poly6_W_CUDA(dist, params.effective_radius);
+				rho += mass[original_index] * sph_kernel_Poly6_W_CUDA(dist, params.effective_radius);
 			}
 		}
 	}
@@ -258,7 +355,7 @@ void compute_boundary_volume_d(
 	float3 pos = data.sorted_pos[index];
 
 	// initial volume
-	float rho = mass[originalIndex] * Poly6_W_CUDA(0, params.effective_radius);
+	float rho = mass[originalIndex] * sph_kernel_Poly6_W_CUDA(0, params.effective_radius);
 
 	// get address in grid
 	int3 gridPos = calcGridPos(pos);
@@ -494,7 +591,7 @@ float pbf_density_0(
 				float dist = length(vec);
 				float rho = 0.f;
 
-				rho = mass[original_index] * Poly6_W_CUDA(dist, params.effective_radius);
+				rho = mass[original_index] * sph_kernel_Poly6_W_CUDA(dist, params.effective_radius);
 
 				density += rho;
 			}
@@ -537,7 +634,7 @@ float pbf_density_1(
 				float dist = length(vec);
 				float rho = 0.f;
 
-				rho = params.rest_density * b_volume[original_index] * Poly6_W_CUDA(dist, params.effective_radius);
+				rho = params.rest_density * b_volume[original_index] * sph_kernel_Poly6_W_CUDA(dist, params.effective_radius);
 
 				density += rho;
 			}
@@ -577,7 +674,7 @@ float pbf_density_boundary(
 			float3 vec = pos1 - pos2;
 			float dist = length(vec);
 
-			float rho = params.rest_density * volume[original_index] * Poly6_W_CUDA(dist, params.effective_radius);
+			float rho = params.rest_density * volume[original_index] * sph_kernel_Poly6_W_CUDA(dist, params.effective_radius);
 
 			density += rho;	
 		}
@@ -619,7 +716,7 @@ float pbf_boundary_density(
 			float3 vec = pos1 - pos2;
 			float dist = length(vec);
 
-			float rho = mass[original_index] * Poly6_W_CUDA(dist, params.effective_radius);
+			float rho = mass[original_index] * sph_kernel_Poly6_W_CUDA(dist, params.effective_radius);
 
 			density += rho;
 		}
@@ -663,7 +760,7 @@ float pbf_lambda_0(
 				float3 gradientC_j;
 
 				gradientC_j = (1.f / params.rest_density) *
-					Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
+					sph_kernel_Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
 
 				float dot_val = dot(gradientC_j, gradientC_j);
 				gradientC_sum += dot_val;
@@ -713,7 +810,7 @@ float pbf_lambda_1(
 
 				gradientC_j = (1.f / params.rest_density) *
 						(params.rest_density * vol / particle_mass) *
-						Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
+						sph_kernel_Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
 
 				float dot_val = dot(gradientC_j, gradientC_j);
 				gradientC_sum += dot_val;
@@ -756,7 +853,7 @@ float pbf_lambda_boundary(
 
 			float3 gradientC_j = (1.f / params.rest_density) * 
 				(params.rest_density * vol / particle_mass) *  
-				Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
+				sph_kernel_Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
 
 			float dot_val = dot(gradientC_j, gradientC_j);
 			gradientC_sum += dot_val;
@@ -794,7 +891,7 @@ float pbf_boundary_lambda(
 			float dist = length(vec);
 
 			float3 gradientC_j = (1.f / params.rest_density) *
-				Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
+				sph_kernel_Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
 
 			float dot_val = dot(gradientC_j, gradientC_j);
 			gradientC_sum += dot_val;
@@ -841,11 +938,11 @@ float3 pbf_correction(
 				float3 vec = pos - pos2;
 				float dist = length(vec);
 
-				float3 gradient = Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
+				float3 gradient = sph_kernel_Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
 				
 				float scorr = -0.1f;
-				float x = Poly6_W_CUDA(dist, params.effective_radius) / 
-					Poly6_W_CUDA(0.3f * params.effective_radius, params.effective_radius);
+				float x = sph_kernel_Poly6_W_CUDA(dist, params.effective_radius) / 
+					sph_kernel_Poly6_W_CUDA(0.3f * params.effective_radius, params.effective_radius);
 				x = pow(x, 4);
 				scorr = scorr * x * dt * dt * dt;
 				
@@ -896,11 +993,11 @@ float3 pbf_correction_boundary(
 			float3 vec = pos - pos2;
 			float dist = length(vec);
 
-			float3 gradient = Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
+			float3 gradient = sph_kernel_Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
 
 			float scorr = -0.1f;
-			float x = Poly6_W_CUDA(dist, params.effective_radius) /
-				Poly6_W_CUDA(0.3f * params.effective_radius, params.effective_radius);
+			float x = sph_kernel_Poly6_W_CUDA(dist, params.effective_radius) /
+				sph_kernel_Poly6_W_CUDA(0.3f * params.effective_radius, params.effective_radius);
 			x = pow(x, 4);
 			scorr = scorr * x * dt * dt;
 
@@ -954,11 +1051,11 @@ float3 pbf_correction_coupling(
 
 				if (dist <= 2.f * params.particle_radius)
 				{
-					float3 gradient = Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
+					float3 gradient = sph_kernel_Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
 
 					float scorr = -0.1f;
-					float x = Poly6_W_CUDA(dist, params.effective_radius) /
-						Poly6_W_CUDA(0.3f * params.effective_radius, params.effective_radius);
+					float x = sph_kernel_Poly6_W_CUDA(dist, params.effective_radius) /
+						sph_kernel_Poly6_W_CUDA(0.3f * params.effective_radius, params.effective_radius);
 					x = pow(x, 4);
 					scorr = scorr * x * dt * dt;
 
@@ -999,7 +1096,7 @@ void compute_density_d(
 	float3 pos = cell_data.sorted_pos[index];
 	
 	// initial density
-	float rho = mass[originalIndex] * Poly6_W_CUDA(0, params.effective_radius);
+	float rho = mass[originalIndex] * sph_kernel_Poly6_W_CUDA(0, params.effective_radius);
 
 	// get address in grid
 	int3 gridPos = calcGridPos(pos);
@@ -1078,7 +1175,7 @@ void compute_boundary_density_d(
 	float3 pos = b_cell_data.sorted_pos[index];
 
 	// initial density 
-	float rho = params.rest_density * b_volume[originalIndex] * Poly6_W_CUDA(0, params.effective_radius);
+	float rho = params.rest_density * b_volume[originalIndex] * sph_kernel_Poly6_W_CUDA(0, params.effective_radius);
 
 	// get address in grid of boundary particles (basically the same as fluid particle)
 	int3 gridPos = calcGridPos(pos);
@@ -1228,7 +1325,6 @@ void compute_boundary_lambdas_d(
 
 	// initial density
 	b_lambda[originalIndex] = -b_C[originalIndex];
-	float particle_mass = b_mass[originalIndex];
 
 	// get address in grid
 	int3 gridPos = calcGridPos(pos);
@@ -1417,12 +1513,12 @@ void finalize_correction(
 
 }
 
-void allocateArray(void** devPtr, size_t size)
+void allocate_array(void** devPtr, size_t size)
 {
 	checkCudaErrors(cudaMalloc(devPtr, size));
 }
 
-void setParams(SimParams* param_in)
+void set_sim_params(SimParams* param_in)
 {
 	checkCudaErrors(cudaMemcpyToSymbol(params, param_in, sizeof(SimParams)));
 }
@@ -1966,7 +2062,6 @@ void compute_friction_correction(
 
 	// read particle data from sorted arrays
 	float3 pos = cell_data.sorted_pos[index];
-	float3 new_pos0 = new_pos[original_index];
 	float3 original_pos0 = original_pos[original_index];
 
 	float w0 = invMass[original_index];
@@ -2051,7 +2146,7 @@ void solve_pbd_dem(
 				//particles->m_d_positions,
 				dem_particles->m_d_predict_positions,
 				numParticles,
-				(64*64*64)
+				NUM_CELLS
 			);
 		}
 		compute_distance_correction << <num_blocks, num_threads >> > (
@@ -2088,7 +2183,7 @@ void solve_pbd_dem(
 		//particles->m_d_positions,
 		dem_particles->m_d_predict_positions,
 		numParticles,
-		(64 * 64 * 64)
+		NUM_CELLS
 	);
 
 	compute_friction_correction << <num_blocks, num_threads >> > (
@@ -2244,7 +2339,7 @@ void compute_snow_sph_density_d(
 	float3 pos = sph_cell_data.sorted_pos[index];
 
 	// initial density
-	float rho = mass[originalIndex] * Poly6_W_CUDA(0, params.effective_radius);
+	float rho = mass[originalIndex] * sph_kernel_Poly6_W_CUDA(0, params.effective_radius);
 
 	// get address in grid
 	int3 gridPos = calcGridPos(pos);
@@ -2345,7 +2440,7 @@ void compute_snow_dem_sph_density_d(
 	float3 pos = dem_cell_data.sorted_pos[index];
 
 	// initial density 
-	float rho = dem_mass[originalIndex] * Poly6_W_CUDA(0, params.effective_radius);
+	float rho = dem_mass[originalIndex] * sph_kernel_Poly6_W_CUDA(0, params.effective_radius);
 
 	// get address in grid of boundary particles (basically the same as fluid particle)
 	int3 gridPos = calcGridPos(pos);
@@ -2445,7 +2540,7 @@ void compute_snow_boundary_density_d(
 	float3 pos = b_cell_data.sorted_pos[index];
 
 	// initial density 
-	float rho = params.rest_density * b_volume[originalIndex] * Poly6_W_CUDA(0, params.effective_radius);
+	float rho = params.rest_density * b_volume[originalIndex] * sph_kernel_Poly6_W_CUDA(0, params.effective_radius);
 
 	// get address in grid of boundary particles (basically the same as fluid particle)
 	int3 gridPos = calcGridPos(pos);
@@ -2697,7 +2792,6 @@ void compute_dem_sph_lambdas_d(
 
 	// initial density
 	dem_lambda[originalIndex] = -dem_C[originalIndex];
-	float particle_mass = dem_mass[originalIndex];
 
 	// get address in grid
 	int3 gridPos = calcGridPos(pos);
@@ -2798,7 +2892,6 @@ void compute_snow_boundary_lambdas_d(
 
 	// initial density
 	b_lambda[originalIndex] = -b_C[originalIndex];
-	float particle_mass = b_mass[originalIndex];
 
 	// get address in grid
 	int3 gridPos = calcGridPos(pos);
@@ -2808,7 +2901,7 @@ void compute_snow_boundary_lambdas_d(
 	//Poly6_W_Gradient_CUDA(make_float3(0, 0, 0), 0, params.effective_radius);
 	float gradientC_sum = dot(gradientC_i, gradientC_i);
 
-	// traverse 27 neighbors in boundary cells (boundary - boundary)
+ 	// traverse 27 neighbors in boundary cells (boundary - boundary)
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -2955,8 +3048,6 @@ bool sphere_cd_coupling(
 
 		for (uint j = start_index; j < end_index; j++)
 		{
-			uint original_index_j = cell_data.grid_index[j];
-
 			float3 pos2 = cell_data.sorted_pos[j];
 			float3 v = pos - pos2;
 			float dist = length(v);
@@ -3298,6 +3389,188 @@ inline void compute_snow_distance_correction(
 
 }
 
+inline __device__
+float3 xsph_viscosity_cell(
+	int3    grid_pos,
+	uint    index,
+	float3  pos,
+	float3	v_i,
+	float3*	vel,
+	float*	mass,
+	float*  density,
+	CellData cell_data
+)
+{
+	uint grid_hash = calcGridHash(grid_pos);
+
+	// get start of bucket for this cell
+	uint start_index = cell_data.cell_start[grid_hash];
+	float3 res = make_float3(0, 0, 0);
+
+	if (start_index != 0xffffffff)          // cell is not empty
+	{
+		// iterate over particles in this cell
+		uint end_index = cell_data.cell_end[grid_hash];
+
+		for (uint j = start_index; j < end_index; j++)
+		{
+			if (j != index)
+			{
+				uint original_index_j = cell_data.grid_index[j];
+
+				float3 pos2 = cell_data.sorted_pos[j];
+				float3 vec = pos - pos2;
+				float dist = length(vec);
+				float3 v_j = vel[original_index_j];
+				float3 v_i_j = v_j - v_i;
+
+				res += (mass[original_index_j]/density[original_index_j]) * v_i_j * sph_kernel_Poly6_W_CUDA(dist, params.effective_radius);
+			}
+			
+		}
+
+	}
+	return res;
+}
+
+inline
+__device__
+float3 xsph_viscosity_cell_coupling(
+	int3    grid_pos,
+	uint    index,
+	float3  pos,
+	float3  v_i,
+	float3*	other_vel,
+	CellData other_cell_data
+	)
+{
+	uint grid_hash = calcGridHash(grid_pos);
+
+	// get start of bucket for this cell
+	uint start_index = other_cell_data.cell_start[grid_hash];
+	float3 res = make_float3(0, 0, 0);
+
+	if (start_index != 0xffffffff)          // cell is not empty
+	{
+		// iterate over particles in this cell
+		uint end_index = other_cell_data.cell_end[grid_hash];
+
+		for (uint j = start_index; j < end_index; j++)
+		{
+			uint original_index_j = other_cell_data.grid_index[j];
+
+			float3 pos2 = other_cell_data.sorted_pos[j];
+			float3 vec = pos - pos2;
+			float dist = length(vec);
+			float3 v_j = other_vel[original_index_j];
+			float3 v_i_j = v_j - v_i;
+
+			res += v_i_j * sph_kernel_Poly6_W_CUDA(dist, params.effective_radius);
+	}
+
+	}
+	return res;
+}
+
+__global__ 
+void xsph_viscosity(
+	float3* sph_vel,
+	float*  sph_mass,
+	float*  sph_density,
+	float3* dem_vel,
+	CellData sph_cell_data,
+	CellData dem_cell_data,
+	uint sph_num_particles
+)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= sph_num_particles) 
+		return;
+
+	uint original_index = sph_cell_data.grid_index[index];
+
+	cg::thread_block cta = cg::this_thread_block();
+	// read particle data from sorted arrays
+	float3 pos = sph_cell_data.sorted_pos[index];
+	float3 v_i = sph_vel[original_index];
+	// get address in grid
+	int3 gridPos = calcGridPos(pos);
+
+	float3 corr = make_float3(0, 0, 0);
+
+	// viscosity with sph particles
+	for (int z = -1; z <= 1; z++)
+	{
+		for (int y = -1; y <= 1; y++)
+		{
+			for (int x = -1; x <= 1; x++)
+			{
+				int3 neighbor_pos = gridPos + make_int3(x, y, z);
+				corr += xsph_viscosity_cell(
+					neighbor_pos, index,
+					pos, v_i,
+					sph_vel,
+					sph_mass,
+					sph_density,
+					sph_cell_data
+					);
+			}
+		}
+	}
+
+	// viscosity with dem particles
+	/*
+	for (int z = -1; z <= 1; z++)
+	{
+		for (int y = -1; y <= 1; y++)
+		{
+			for (int x = -1; x <= 1; x++)
+			{
+				int3 neighbor_pos = gridPos + make_int3(x, y, z);
+				corr += xsph_viscosity_cell_coupling(
+					neighbor_pos, index,
+					pos, v_i,
+					dem_vel,
+					dem_cell_data
+					);
+			}
+		}
+	}
+	*/ 
+	corr *= params.viscosity;
+
+	cg::sync(cta);
+
+	sph_vel[original_index] += corr;
+
+}
+
+void apply_XSPH_viscosity(
+	ParticleSet* sph_particles,
+	ParticleSet* dem_particles,
+	CellData sph_cell_data,
+	CellData dem_cell_data,
+	uint sph_num_particles
+)
+{
+	uint sph_num_threads, sph_num_blocks;
+	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, sph_num_blocks, sph_num_threads);
+
+	xsph_viscosity <<<sph_num_blocks, sph_num_threads>>> (
+		sph_particles->m_d_velocity,
+		sph_particles->m_d_mass,
+		sph_particles->m_d_density,
+		dem_particles->m_d_velocity,
+		sph_cell_data,
+		dem_cell_data,
+		sph_num_particles
+	);
+
+	getLastCudaError("Kernel execution failed : apply_correction");
+
+}
+
 void snow_simulation(
 	ParticleSet* sph_particles,
 	ParticleSet* dem_particles, 
@@ -3423,62 +3696,63 @@ void snow_simulation(
 			);
 		getLastCudaError("Kernel execution failed: apply_correction ");
 
-		calculate_hash(
-			dem_cell_data,
-			dem_particles->m_d_predict_positions,
-			dem_num_particles
-			);
-		sort_particles(
-			dem_cell_data,
-			dem_num_particles
-			);
-		reorder_data(
-			dem_cell_data,
-			//particles->m_d_positions,
-			dem_particles->m_d_predict_positions,
-			dem_num_particles,
-			(64 * 64 * 64)
-			);
-
-		calculate_hash(
-			sph_cell_data,
-			sph_particles->m_d_predict_positions,
-			sph_num_particles
-			);
-		sort_particles(
-			sph_cell_data,
-			sph_num_particles
-			);
-		reorder_data(
-			sph_cell_data,
-			//particles->m_d_positions,
-			sph_particles->m_d_predict_positions,
-			sph_num_particles,
-			(64 * 64 * 64)
-			);
-
-		compute_friction_correction << <dem_num_blocks, dem_num_threads >> > (
-			dem_particles->m_d_correction,
-			dem_particles->m_d_new_positions,
-			dem_particles->m_d_positions,
-			dem_particles->m_d_massInv,
-			boundary_particles->m_d_massInv,
-			dem_cell_data,
-			b_cell_data,
-			dem_num_particles
-			);
-		apply_correction << <dem_num_blocks, dem_num_threads >> > (
-			dem_particles->m_d_new_positions,
-			dem_particles->m_d_predict_positions,
-			dem_particles->m_d_correction,
-			dem_cell_data,
-			dem_num_particles
-			);
-		getLastCudaError("Kernel execution failed: apply_correction ");
-
 	}
 
-	
+	calculate_hash(
+		dem_cell_data,
+		dem_particles->m_d_predict_positions,
+		dem_num_particles
+		);
+	sort_particles(
+		dem_cell_data,
+		dem_num_particles
+		);
+	reorder_data(
+		dem_cell_data,
+		//particles->m_d_positions,
+		dem_particles->m_d_predict_positions,
+		dem_num_particles,
+		(64 * 64 * 64)
+		);
+
+	calculate_hash(
+		sph_cell_data,
+		sph_particles->m_d_predict_positions,
+		sph_num_particles
+		);
+	sort_particles(
+		sph_cell_data,
+		sph_num_particles
+		);
+	reorder_data(
+		sph_cell_data,
+		//particles->m_d_positions,
+		sph_particles->m_d_predict_positions,
+		sph_num_particles,
+		(64 * 64 * 64)
+		);
+
+	compute_friction_correction << <dem_num_blocks, dem_num_threads >> > (
+		dem_particles->m_d_correction,
+		dem_particles->m_d_new_positions,
+		dem_particles->m_d_positions,
+		dem_particles->m_d_massInv,
+		boundary_particles->m_d_massInv,
+		dem_cell_data,
+		b_cell_data,
+		dem_num_particles
+		);
+	getLastCudaError("Kernel execution failed: compute_friction_correction ");
+
+	apply_correction << <dem_num_blocks, dem_num_threads >> > (
+		dem_particles->m_d_new_positions,
+		dem_particles->m_d_predict_positions,
+		dem_particles->m_d_correction,
+		dem_cell_data,
+		dem_num_particles
+		);
+	getLastCudaError("Kernel execution failed: apply_correction ");
+
 
 	// finialize corrections and compute velocity for next integration 
 	finalize_correction << <sph_num_blocks, sph_num_threads >> > (
@@ -3501,4 +3775,12 @@ void snow_simulation(
 		);
 	getLastCudaError("Kernel execution failed: finalize_correction ");
 
+	
+	apply_XSPH_viscosity(
+		sph_particles, 
+		dem_particles,
+		sph_cell_data,
+		dem_cell_data,
+		sph_num_particles
+	);
 }
