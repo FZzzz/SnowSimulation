@@ -58,7 +58,7 @@ inline __device__ float3 sph_kernel_Poly6_W_Gradient_CUDA(float3 diff, float dis
 		//float scalar = (-945.0f / (32.0f * CUDART_PI * h9));
 		float scalar = params.poly6_G;
 		scalar = scalar * q2;
-		float3 result = scalar * make_float3(diff.x, diff.y, diff.z);
+		float3 result = scalar * diff;// make_float3(diff.x, diff.y, diff.z);
 
 		return result;
 	}
@@ -103,7 +103,7 @@ inline __device__ float3 sph_kernel_Spiky_W_Gradient_CUDA(float3 diff, float dis
 
 		//float scalar = (-45.0f / (CUDART_PI*h6)) * (q2 / distance);
 		float scalar = params.spiky_G * (q2 / distance);
-		float3 result = scalar * make_float3(diff.x, diff.y, diff.z);
+		float3 result = scalar * diff;// make_float3(diff.x, diff.y, diff.z);
 
 		return result;
 	}
@@ -1754,7 +1754,7 @@ float3 pbd_distance_correction(
 					C = dist - 2.f * params.particle_radius;
 					
 					// normalize v + 0.000001f for vanish problem
-					float3 n = v / (dist);// +0.000001f);
+					float3 n = v / dist + params.pbd_epsilon;// +0.000001f);
 
 					correction_j = -w0 * (1.f / w_sum) * C * n;
 		
@@ -1811,8 +1811,8 @@ float3 pbd_distance_correction_boundary(
 				float w_sum = w0 + w1;
 				C = dist - 2.f * params.particle_radius;
 
-				// normalize v + 0.000001f for vanish problem
-				float3 n = v / (dist);// +0.000001f);
+				// normalize v + 0.000001f to prevent not becoming infinite
+				float3 n = v / (dist) + params.pbd_epsilon;// +0.000001f);
 
 				correction_j = -w0 * (1.f / w_sum) * C * n;
 			}
@@ -3361,7 +3361,7 @@ inline void compute_snow_distance_correction(
 	);
 	getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
 	
-	
+	/*
 	//dem-sph distance correction (reversed parameters for the same function)
 	compute_sph_dem_distance_correction << <dem_num_blocks, dem_num_threads >> > (
 		dem_particles->m_d_correction,
@@ -3372,7 +3372,7 @@ inline void compute_snow_distance_correction(
 		dem_num_particles
 	);
 	getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
-	
+	*/
 
 	// dem-dem distance correction
 	// dem-boundary distance correction

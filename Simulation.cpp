@@ -38,15 +38,15 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	uint3 grid_size = make_uint3(64, 64, 64);
 	glm::vec3 fluid_half_extends = glm::vec3(0.9998f, 0.1f, 0.9998f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
-	glm::vec3 fluid_origin = glm::vec3(0.0f, 1.12f, 0.0f);
-	glm::vec3 snow_origin = glm::vec3(0.f, 0.251f, 0.0f);
+	glm::vec3 fluid_origin = glm::vec3(0.0f, 0.12f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.f, 1.251f, 0.0f);
 	
 	m_neighbor_searcher = std::make_shared<NeighborSearch>(m_particle_system, grid_size);
 	m_solver = std::make_shared<ConstraintSolver>(mode);
 
 	SetupSimParams();
 	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, false);
-	GenerateParticleCube(snow_half_extends, snow_origin, 1, true);
+	GenerateParticleCube(snow_half_extends, snow_origin, 1, false);
 	InitializeBoundaryParticles();
 
 #ifdef _USE_CUDA_
@@ -380,6 +380,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->effective_radius = effective_radius;
 	m_sim_params->rest_density = m_rest_density;
 	m_sim_params->epsilon = 1000.f;
+	m_sim_params->pbd_epsilon = 0.8f * particle_radius;
 	m_sim_params->grid_size = m_neighbor_searcher->m_grid_size;
 	m_sim_params->num_cells = m_neighbor_searcher->m_num_grid_cells;
 	m_sim_params->world_origin = make_float3(0, 0, 0);
@@ -391,7 +392,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->kinematic_friction = 0.75f;
 
 	m_sim_params->sor_coeff = 1.0f * (1.f/5.f);
-	m_sim_params->viscosity = 0.00005f;
+	m_sim_params->viscosity = 0.001f;
 
 	m_sim_params->poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));
 	m_sim_params->poly6_G = (-945.0f / (32.0f * M_PI * glm::pow(effective_radius, 9)));
