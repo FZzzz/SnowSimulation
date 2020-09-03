@@ -30,6 +30,7 @@ struct SimParams
 	float  effective_radius;
 	float  particle_radius;
 	float  rest_density;
+	float  scorr_coeff;
 
 	// dem coefficient
 	float  boundary_damping;

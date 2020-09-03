@@ -544,13 +544,13 @@ void integrate_pbd_cd_d(
 	
 
 	// Velocity limitation
-	/*
-	float limit = 0.5f;
+	
+	float limit = 2.f;
 	if (length(t_vel) > limit)
 	{
 		t_vel = (limit / length(t_vel)) * t_vel ;
 	}
-	*/
+	
 
 	predict_pos[index] = pos[index] + dt * t_vel;
 	vel[index] = t_vel;
@@ -934,25 +934,23 @@ float3 pbf_correction(
 			{
 				uint original_index = cell_data.grid_index[j];
 
-				float3 pos2 = cell_data.sorted_pos[j];
-				float3 vec = pos - pos2;
-				float dist = length(vec);
+				const float3 pos2 = cell_data.sorted_pos[j];
+				const float3 vec = pos - pos2;
+				const float dist = length(vec);
 
-				float3 gradient = sph_kernel_Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
+				const float3 gradient = sph_kernel_Poly6_W_Gradient_CUDA(vec, dist, params.effective_radius);
 				
-				float scorr = -0.1f;
 				float x = sph_kernel_Poly6_W_CUDA(dist, params.effective_radius) / 
 					sph_kernel_Poly6_W_CUDA(0.3f * params.effective_radius, params.effective_radius);
 				x = pow(x, 4);
-				scorr = scorr * x * dt * dt * dt;
+				const float scorr = -params.scorr_coeff * x * dt * dt * dt;
 				
 				//printf("scorr: %f\n", scorr);
 
-				float3 res = //(1.f / params.rest_density) *
-					(lambda_i + lambdas[original_index] +scorr)*
-					gradient;
-				
-				correction += res;
+				//float3 res = //(1.f / params.rest_density) *
+					
+				correction += (lambda_i + lambdas[original_index] + scorr) * gradient;
+				;
 			}
 		}
 
@@ -2287,6 +2285,50 @@ void compute_sph_dem_distance_correction(
 	correction[original_index] += corr;
 }
 
+__global__
+void compute_sph_sph_distance_correction(
+	float3* correction,		// output: corrected pos
+	float* invMass,		// input: mass
+	CellData	sph_cell_data,		// input: cell data of dem particles
+	uint		numParticles	// input: number of sph particles
+	)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= numParticles) return;
+
+	uint original_index = sph_cell_data.grid_index[index];
+
+	// read particle data from sorted arrays
+	float3 pos = sph_cell_data.sorted_pos[index];
+	float w0 = invMass[original_index];
+	// get address in grid
+	int3 gridPos = calcGridPos(pos);
+
+	float3 corr = make_float3(0, 0, 0);
+
+	for (int z = -1; z <= 1; z++)
+	{
+		for (int y = -1; y <= 1; y++)
+		{
+			for (int x = -1; x <= 1; x++)
+			{
+				int3 neighbor_pos = gridPos + make_int3(x, y, z);
+				corr += pbd_distance_correction(
+					neighbor_pos, index,
+					pos, w0,
+					invMass,
+					sph_cell_data
+					);
+			}
+		}
+	}
+
+	correction[original_index] += corr;
+}
+
+
+
 /*
  * Compute corrections of SPH particles contributed by DEM particles
  * Treat SPH particles as DEM particles
@@ -3342,7 +3384,9 @@ inline void compute_snow_distance_correction(
 	CellData b_cell_data,
 	uint sph_num_particles,
 	uint dem_num_particles,
-	uint b_num_particles
+	uint b_num_particles,
+	bool correct_dem = false,
+	bool sph_sph_correction = false
 )
 {
 	uint sph_num_threads, sph_num_blocks;
@@ -3361,18 +3405,29 @@ inline void compute_snow_distance_correction(
 	);
 	getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
 	
-	/*
-	//dem-sph distance correction (reversed parameters for the same function)
-	compute_sph_dem_distance_correction << <dem_num_blocks, dem_num_threads >> > (
-		dem_particles->m_d_correction,
-		dem_particles->m_d_massInv,
-		sph_particles->m_d_massInv,
-		dem_cell_data,
-		sph_cell_data,
-		dem_num_particles
-	);
-	getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
-	*/
+	if (correct_dem)
+	{
+		//dem-sph distance correction (reversed parameters for the same function)
+		compute_sph_dem_distance_correction << <dem_num_blocks, dem_num_threads >> > (
+			dem_particles->m_d_correction,
+			dem_particles->m_d_massInv,
+			sph_particles->m_d_massInv,
+			dem_cell_data,
+			sph_cell_data,
+			dem_num_particles
+			);
+		getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
+	}
+
+	if (sph_sph_correction)
+	{
+		compute_sph_sph_distance_correction << <sph_num_blocks, sph_num_threads >> > (
+			sph_particles->m_d_correction,
+			sph_particles->m_d_massInv,
+			sph_cell_data,
+			sph_num_particles
+			);
+	}
 
 	// dem-dem distance correction
 	// dem-boundary distance correction
@@ -3582,7 +3637,9 @@ void snow_simulation(
 	uint dem_num_particles, 
 	uint b_num_particles, 
 	float dt,
-	int iterations
+	int iterations,
+	bool correct_dem,
+	bool sph_sph_correction
 )
 {
 	uint sph_num_threads, sph_num_blocks;
@@ -3675,7 +3732,9 @@ void snow_simulation(
 			b_cell_data,
 			sph_num_particles,
 			dem_num_particles,
-			b_num_particles
+			b_num_particles,
+			correct_dem,
+			sph_sph_correction
 			);
 
 		apply_correction << <sph_num_blocks, sph_num_threads >> > (

@@ -105,7 +105,9 @@ void snow_simulation(
     uint         dem_num_particles,
     uint         b_num_particles,
     float        dt,
-    int          iterations
+    int          iterations,
+    bool         correct_dem,
+    bool         sph_sph_correction
 );
 
 #endif

@@ -137,6 +137,8 @@ bool Simulation::StepCUDA(float dt)
 		return true;
 
 	bool cd_on = true;
+	bool correct_dem = true;
+	bool sph_sph_correction = false;
 
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 
@@ -232,7 +234,9 @@ bool Simulation::StepCUDA(float dt)
 		dem_num_particles,
 		b_num_particles,
 		dt,
-		m_iterations
+		m_iterations,
+		correct_dem,
+		sph_sph_correction
 		);
 
 	/*
@@ -356,10 +360,11 @@ void Simulation::SetupSimParams()
 	//const size_t n_particles = 1000;
 	const float particle_mass = 0.015f;
 	const float n_kernel_particles = 20.f;	
+	const float dem_sph_ratio = 1.25f;
 	// water density = 1000 kg/m^3
 	m_rest_density = 1000.f; 
 	m_sph_particle_mass = particle_mass;
-	m_dem_particle_mass = 1.25f * particle_mass;
+	m_dem_particle_mass = dem_sph_ratio * particle_mass;
 
 	float effective_radius, particle_radius;
 	
@@ -391,7 +396,8 @@ void Simulation::SetupSimParams()
 	m_sim_params->static_friction = 1.0f;
 	m_sim_params->kinematic_friction = 0.75f;
 
-	m_sim_params->sor_coeff = 1.0f * (1.f/5.f);
+	m_sim_params->scorr_coeff = 0.3f;
+	m_sim_params->sor_coeff = 1.0f * (1.f/4.f);
 	m_sim_params->viscosity = 0.001f;
 
 	m_sim_params->poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));
