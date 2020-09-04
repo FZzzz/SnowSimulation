@@ -23,8 +23,9 @@ struct SimParams
 {
 	float3 gravity;
 	float  global_damping;
+	float  maximum_speed;
 	
-	// pbf sph coeffcient
+	// pbf sph coeffcients
 	float  epsilon;
 	float  pbd_epsilon;
 	float  effective_radius;
@@ -32,10 +33,13 @@ struct SimParams
 	float  rest_density;
 	float  scorr_coeff;
 
-	// dem coefficient
+	// dem coefficients
 	float  boundary_damping;
 	float  static_friction;
 	float  kinematic_friction;
+
+	// coupling coefficients
+	//float  sph_dem_corr;
 
 	float  sor_coeff;
 	float  viscosity;

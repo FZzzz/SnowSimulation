@@ -545,7 +545,7 @@ void integrate_pbd_cd_d(
 
 	// Velocity limitation
 	
-	float limit = 2.f;
+	const float limit = params.maximum_speed;
 	if (length(t_vel) > limit)
 	{
 		t_vel = (limit / length(t_vel)) * t_vel ;
@@ -2446,7 +2446,10 @@ void compute_snow_sph_density_d(
 
 	// Update date density and constraint value
 	density[originalIndex] = rho;
-	C[originalIndex] = (rho / params.rest_density) - 1.f;
+	if ((rho / params.rest_density) - 1.f > 0.f)
+		C[originalIndex] = (rho / params.rest_density) - 1.f;
+	else
+		C[originalIndex] = 0.f;
 
 	//printf("rho = %f\n", rho);
 	//printf("C[%u]: %f\n", originalIndex, C[originalIndex]);
@@ -2548,7 +2551,10 @@ void compute_snow_dem_sph_density_d(
 		dem_density[originalIndex] = rho;
 		// **repeated code**
 		// Recompute constraint value of fluid particle
-		dem_C[originalIndex] = (dem_density[originalIndex] / params.rest_density) - 1.f;
+		if ((dem_density[originalIndex] / params.rest_density) - 1.f > 0)
+			dem_C[originalIndex] = (dem_density[originalIndex] / params.rest_density) - 1.f;
+		else
+			dem_C[originalIndex] = 0.f;
 
 	}	
 }
@@ -2651,7 +2657,10 @@ void compute_snow_boundary_density_d(
 	b_density[originalIndex] = rho;
 	// **repeated code**
 	// Recompute constraint value of fluid particle
-	b_C[originalIndex] = (b_density[originalIndex] / params.rest_density) - 1.f;
+	if ((b_density[originalIndex] / params.rest_density) - 1.f > 0)
+		b_C[originalIndex] = (b_density[originalIndex] / params.rest_density) - 1.f;
+	else
+		b_C[originalIndex] = 0;
 }
 
 inline void compute_snow_pbf_density(
@@ -3496,6 +3505,8 @@ float3 xsph_viscosity_cell_coupling(
 	float3  pos,
 	float3  v_i,
 	float3*	other_vel,
+	float*  other_mass,
+	float*  other_density,
 	CellData other_cell_data
 	)
 {
@@ -3520,7 +3531,7 @@ float3 xsph_viscosity_cell_coupling(
 			float3 v_j = other_vel[original_index_j];
 			float3 v_i_j = v_j - v_i;
 
-			res += v_i_j * sph_kernel_Poly6_W_CUDA(dist, params.effective_radius);
+			res += (other_mass[original_index_j] / other_density[original_index_j]) * v_i_j * sph_kernel_Poly6_W_CUDA(dist, params.effective_radius);
 	}
 
 	}
@@ -3533,6 +3544,8 @@ void xsph_viscosity(
 	float*  sph_mass,
 	float*  sph_density,
 	float3* dem_vel,
+	float*  dem_mass,
+	float*	dem_density,
 	CellData sph_cell_data,
 	CellData dem_cell_data,
 	uint sph_num_particles
@@ -3575,7 +3588,7 @@ void xsph_viscosity(
 	}
 
 	// viscosity with dem particles
-	/*
+	
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -3587,12 +3600,14 @@ void xsph_viscosity(
 					neighbor_pos, index,
 					pos, v_i,
 					dem_vel,
+					dem_mass,
+					dem_density,
 					dem_cell_data
 					);
 			}
 		}
 	}
-	*/ 
+	 
 	corr *= params.viscosity;
 
 	cg::sync(cta);
@@ -3617,6 +3632,8 @@ void apply_XSPH_viscosity(
 		sph_particles->m_d_mass,
 		sph_particles->m_d_density,
 		dem_particles->m_d_velocity,
+		dem_particles->m_d_mass,
+		dem_particles->m_d_density,
 		sph_cell_data,
 		dem_cell_data,
 		sph_num_particles
@@ -3771,7 +3788,7 @@ void snow_simulation(
 		//particles->m_d_positions,
 		dem_particles->m_d_predict_positions,
 		dem_num_particles,
-		(64 * 64 * 64)
+		NUM_CELLS
 		);
 
 	calculate_hash(
@@ -3788,7 +3805,7 @@ void snow_simulation(
 		//particles->m_d_positions,
 		sph_particles->m_d_predict_positions,
 		sph_num_particles,
-		(64 * 64 * 64)
+		NUM_CELLS
 		);
 
 	compute_friction_correction << <dem_num_blocks, dem_num_threads >> > (

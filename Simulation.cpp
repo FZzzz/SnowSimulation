@@ -381,6 +381,8 @@ void Simulation::SetupSimParams()
 
 	m_sim_params->gravity = make_float3(0.f, -9.8f, 0.f);
 	m_sim_params->global_damping = 1.f;
+	m_sim_params->maximum_speed = 500.f;
+
 	m_sim_params->particle_radius = particle_radius;
 	m_sim_params->effective_radius = effective_radius;
 	m_sim_params->rest_density = m_rest_density;
@@ -390,13 +392,15 @@ void Simulation::SetupSimParams()
 	m_sim_params->num_cells = m_neighbor_searcher->m_num_grid_cells;
 	m_sim_params->world_origin = make_float3(0, 0, 0);
 	m_sim_params->cell_size = make_float3(m_sim_params->effective_radius);
-	m_sim_params->boundary_damping = 0.05f;
+	m_sim_params->boundary_damping = 0.5f;
 	
-	// ice friction at -12 C
+	//coupling coefficients
+	//m_sim_params->sph_dem_corr = 0.05f;
+
 	m_sim_params->static_friction = 1.0f;
 	m_sim_params->kinematic_friction = 0.75f;
 
-	m_sim_params->scorr_coeff = 0.3f;
+	m_sim_params->scorr_coeff = 0.1f;
 	m_sim_params->sor_coeff = 1.0f * (1.f/4.f);
 	m_sim_params->viscosity = 0.001f;
 
