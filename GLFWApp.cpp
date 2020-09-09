@@ -396,7 +396,8 @@ void Mouse_scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
 	auto camera = GLFWApp::getInstance()->getMainCamera();
 
-	camera->Zoom(0.1f * yoffset);
+	//camera->Zoom(0.1f * yoffset);
+	camera->MoveForward(-0.1f * yoffset);
 }
 
 void GLFWApp::Render()

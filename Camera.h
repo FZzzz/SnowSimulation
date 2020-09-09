@@ -34,6 +34,7 @@ public:
 
 	void Zoom(float fov_change);
 	void Rotate(float phi_change, float theta_change);
+	void MoveForward(float change_rate);
 
 	glm::mat4 m_cameraMat;
 	glm::mat4 m_projection;

@@ -53,6 +53,7 @@ void Camera::Update()
 	m_right = glm::normalize(glm::vec3(vec_rot * glm::vec4(1, 0, 0, 1)));
 	m_up = glm::normalize(glm::cross(m_right, m_front));
 	*/
+	m_front = m_target_position - m_position;
 
 	m_lookAt = glm::lookAt(m_position, m_target_position, glm::vec3(0,1,0));
 	m_projection = glm::perspective(m_fov, m_screen_width / m_screen_height, m_near_plane, m_far_plane);
@@ -127,4 +128,10 @@ void Camera::Rotate(float phi_change, float theta_change)
 	m_position.x = m_target_position.x + m_rotate_radius * glm::cos(m_theta) * glm::sin(m_phi);
 	m_position.y = m_target_position.y + m_rotate_radius * glm::sin(m_theta);
 	m_position.z = m_target_position.z + m_rotate_radius * glm::cos(m_theta) * glm::cos(m_phi) ;
+}
+
+void Camera::MoveForward(float change_rate)
+{
+	m_position += change_rate * m_front;
+	m_rotate_radius = glm::distance(m_target_position, m_position);
 }
