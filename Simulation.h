@@ -38,8 +38,11 @@ struct SimParams
 	float  static_friction;
 	float  kinematic_friction;
 
-	// coupling coefficients
-	//float  sph_dem_corr;
+	// wetness coefficients
+	float wetness_threshold;
+	float k_p; // propagation coefficient
+	float k_bridge;
+
 
 	float  sor_coeff;
 	float  viscosity;

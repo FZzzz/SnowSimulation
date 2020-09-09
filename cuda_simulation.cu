@@ -384,7 +384,7 @@ void compute_boundary_volume_d(
 	//printf("C[%u]: %f\n", originalIndex, C[originalIndex]);
 }
 
-void compute_grid_size(uint n, uint block_size, uint& num_blocks, uint& num_threads)
+inline void compute_grid_size(uint n, uint block_size, uint& num_blocks, uint& num_threads)
 {
 	num_threads = min(block_size, n);
 	num_blocks = (n % num_threads != 0) ? (n / num_threads + 1) : (n / num_threads);
@@ -424,6 +424,32 @@ void reorder_data(
 	getLastCudaError("Kernel execution failed: reorderDataAndFindCellStartD");
 
 }
+
+void sort_and_reorder(
+	float3* predict_pos,
+	CellData cell_data,
+	uint num_particles,
+	uint num_cells=NUM_CELLS
+) 
+{
+	calculate_hash(
+		cell_data,
+		predict_pos,
+		num_particles
+	);
+	sort_particles(
+		cell_data,
+		num_particles
+	);
+	reorder_data(
+		cell_data,
+		predict_pos,
+		num_particles,
+		num_particles
+	);
+}
+
+
 /*
 void reorderData_boundary(
 	CellData cell_data, 
@@ -3080,6 +3106,44 @@ inline void compute_snow_pbf_lambdas(
 }
 
 inline __device__
+float count_neighbor_cell(
+	int3 grid_pos,
+	uint index,
+	float3 pos,
+	CellData cell_data
+)
+{
+	uint grid_hash = calcGridHash(grid_pos);
+
+	// get start of bucket for this cell
+	uint start_index = cell_data.cell_start[grid_hash];
+	float3 correction = make_float3(0, 0, 0);
+
+	float count = 0;
+	if (start_index != 0xffffffff)          // cell is not empty
+	{
+		// iterate over particles in this cell
+		uint end_index = cell_data.cell_end[grid_hash];
+
+		for (uint j = start_index; j < end_index; j++)
+		{
+			// check for repeat
+			if (j != index)
+			{
+				float dist = length(pos - cell_data.sorted_pos[j]);
+
+				// count if close enough
+				if (dist <= 2.f * params.particle_radius)
+				{
+					count += 1.f;
+				}
+			}
+		}
+	}
+	return count;
+}
+
+inline __device__
 bool sphere_cd_coupling(
 	int3    grid_pos,
 	float3  pos,
@@ -3643,6 +3707,159 @@ void apply_XSPH_viscosity(
 
 }
 
+inline __device__
+float propagate_wetness_cell(
+	int3    grid_pos,
+	uint    index,
+	float3  pos,
+	float*	wetness,
+	float*	neighbor_count,
+	CellData other_cell_data,
+	float dt
+)
+{
+	uint grid_hash = calcGridHash(grid_pos);
+
+	// get start of bucket for this cell
+	uint start_index = other_cell_data.cell_start[grid_hash];
+	float res = 0;
+
+	if (start_index != 0xffffffff)          // cell is not empty
+	{
+		// iterate over particles in this cell
+		uint end_index = other_cell_data.cell_end[grid_hash];
+
+		for (uint j = start_index; j < end_index; j++)
+		{
+			if (j != index)
+			{
+				uint original_index_j = other_cell_data.grid_index[j];
+
+				float3 pos2 = other_cell_data.sorted_pos[j];
+				//float3 vec = pos - pos2;
+				float dist = length(pos - pos2);
+				
+				if (dist <= 2.f * params.particle_radius)
+				{
+					float dw = wetness[original_index_j] - params.wetness_threshold;
+					res += params.k_p * dt * dw / neighbor_count[original_index_j];
+				}
+				
+			}
+			
+		}
+
+	}
+	return res;
+}
+
+__global__
+void propagate_wetness_d(
+	float* dem_wetness,
+	float* neighbor_count,
+	CellData dem_cell_data,
+	uint dem_num_particles,
+	float dt
+)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= dem_num_particles)
+		return;
+
+	uint original_index = dem_cell_data.grid_index[index];
+
+	// read particle data from sorted arrays
+	float3 pos = dem_cell_data.sorted_pos[index];
+	// get address in grid
+	int3 gridPos = calcGridPos(pos);
+
+
+	// lock critical section
+	cg::thread_block cta1 = cg::this_thread_block();
+	float count = 0;
+	for (int z = -1; z <= 1; z++)
+	{
+		for (int y = -1; y <= 1; y++)
+		{
+			for (int x = -1; x <= 1; x++)
+			{
+				int3 neighbor_pos = gridPos + make_int3(x, y, z);
+				count += count_neighbor_cell(gridPos, index, pos, dem_cell_data);
+			}
+		}
+	}
+	cg::sync(cta1);
+
+	// update neighbor_count 
+	neighbor_count[original_index] = count;
+
+	// lock critical section
+	cg::thread_block cta2 = cg::this_thread_block();
+	float change = 0.f;
+
+	// wet propagation between neighbors
+	for (int z = -1; z <= 1; z++)
+	{
+		for (int y = -1; y <= 1; y++)
+		{
+			for (int x = -1; x <= 1; x++)
+			{
+				int3 neighbor_pos = gridPos + make_int3(x, y, z);
+				change += propagate_wetness_cell(
+					gridPos, 
+					index, 
+					pos, 
+					dem_wetness, 
+					neighbor_count, 
+					dem_cell_data, dt
+				);
+			}
+		}
+	}
+
+	// wait & sync
+	cg::sync(cta2);
+
+	dem_wetness[original_index] += change;
+}
+
+
+void propagate_wetness(
+	ParticleSet* sph_particles,
+	ParticleSet* dem_particles,
+	CellData sph_cell_data,
+	CellData dem_cell_data,
+	uint dem_num_particles,
+	float dt
+)
+{
+	uint dem_num_threads, dem_num_blocks;
+	compute_grid_size(dem_num_particles, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
+
+	propagate_wetness_d <<<dem_num_blocks, dem_num_threads>>> (
+		dem_particles->m_d_wetness,
+		dem_particles->m_d_num_neighbors,
+		dem_cell_data,
+		dem_num_particles,
+		dt
+	);
+
+}
+
+
+void compute_wetness_correction(
+	ParticleSet* sph_particles,
+	ParticleSet* dem_particles,
+	CellData sph_cell_data,
+	CellData dem_cell_data,
+	uint dem_num_particles,
+	float dt
+)
+{
+
+}
+
 void snow_simulation(
 	ParticleSet* sph_particles,
 	ParticleSet* dem_particles, 
@@ -3669,39 +3886,17 @@ void snow_simulation(
 		//Search again for stability
 		if (i != 0)
 		{
-			calculate_hash(
-				dem_cell_data,
+			sort_and_reorder(
 				dem_particles->m_d_predict_positions,
-				dem_num_particles
-			);
-			sort_particles(
 				dem_cell_data,
 				dem_num_particles
-			);
-			reorder_data(
-				dem_cell_data,
-				//particles->m_d_positions,
-				dem_particles->m_d_predict_positions,
-				dem_num_particles,
-				(64 * 64 * 64)
 			);
 
-			calculate_hash(
-				sph_cell_data,
+			sort_and_reorder(
 				sph_particles->m_d_predict_positions,
-				sph_num_particles
-				);
-			sort_particles(
 				sph_cell_data,
 				sph_num_particles
-				);
-			reorder_data(
-				sph_cell_data,
-				//particles->m_d_positions,
-				sph_particles->m_d_predict_positions,
-				sph_num_particles,
-				(64 * 64 * 64)
-				);
+			);
 		}
 		compute_snow_pbf_density(
 			sph_particles,
@@ -3774,39 +3969,17 @@ void snow_simulation(
 
 	}
 
-	calculate_hash(
-		dem_cell_data,
+	sort_and_reorder(
 		dem_particles->m_d_predict_positions,
-		dem_num_particles
-		);
-	sort_particles(
 		dem_cell_data,
 		dem_num_particles
-		);
-	reorder_data(
-		dem_cell_data,
-		//particles->m_d_positions,
-		dem_particles->m_d_predict_positions,
-		dem_num_particles,
-		NUM_CELLS
-		);
+	);
 
-	calculate_hash(
-		sph_cell_data,
+	sort_and_reorder(
 		sph_particles->m_d_predict_positions,
-		sph_num_particles
-		);
-	sort_particles(
 		sph_cell_data,
 		sph_num_particles
-		);
-	reorder_data(
-		sph_cell_data,
-		//particles->m_d_positions,
-		sph_particles->m_d_predict_positions,
-		sph_num_particles,
-		NUM_CELLS
-		);
+	);
 
 	compute_friction_correction << <dem_num_blocks, dem_num_threads >> > (
 		dem_particles->m_d_correction,
@@ -3829,6 +4002,15 @@ void snow_simulation(
 		);
 	getLastCudaError("Kernel execution failed: apply_correction ");
 
+
+	sort_and_reorder(
+		dem_particles->m_d_predict_positions,
+		dem_cell_data,
+		dem_num_particles
+	);
+
+	// force-based wetness correction for dem particles
+	compute_wetness_correction();
 
 	// finialize corrections and compute velocity for next integration 
 	finalize_correction << <sph_num_blocks, sph_num_threads >> > (

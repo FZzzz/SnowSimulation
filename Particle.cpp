@@ -185,6 +185,8 @@ ParticleSet::ParticleSet(size_t n, float particle_mass)
 	m_density.resize(n, 0.f);
 	m_C.resize(n, 0.f);
 	m_lambda.resize(n, 0.f);
+
+	m_wetness.resize(n, 0.f);
 }
 
 ParticleSet::~ParticleSet()
