@@ -42,6 +42,7 @@ public:
 	std::vector<float>		m_lambda;
 	std::vector<float>		m_volume;
 	std::vector<float>		m_wetness;
+	std::vector<float>		m_num_neighbors;
 
 	//ParticleDataCUDA* m_d_cuda
 	float3* m_d_prev_positions;

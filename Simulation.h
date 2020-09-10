@@ -40,6 +40,7 @@ struct SimParams
 
 	// wetness coefficients
 	float wetness_threshold;
+	float wetness_max;
 	float k_p; // propagation coefficient
 	float k_bridge;
 

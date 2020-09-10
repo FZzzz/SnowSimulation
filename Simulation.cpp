@@ -38,14 +38,14 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	uint3 grid_size = make_uint3(64, 64, 64);
 	glm::vec3 fluid_half_extends = glm::vec3(0.9998f, 0.1f, 0.9998f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
-	glm::vec3 fluid_origin = glm::vec3(0.0f, 0.12f, 0.0f);
-	glm::vec3 snow_origin = glm::vec3(0.f, 1.251f, 0.0f);
+	glm::vec3 fluid_origin = glm::vec3(0.0f, 1.112f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.f, 0.25f, 0.0f);
 	
 	m_neighbor_searcher = std::make_shared<NeighborSearch>(m_particle_system, grid_size);
 	m_solver = std::make_shared<ConstraintSolver>(mode);
 
 	SetupSimParams();
-	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, false);
+	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, true);
 	GenerateParticleCube(snow_half_extends, snow_origin, 1, false);
 	InitializeBoundaryParticles();
 
@@ -137,8 +137,9 @@ bool Simulation::StepCUDA(float dt)
 		return true;
 
 	bool cd_on = true;
-	bool correct_dem = true;
+	bool correct_dem = false;
 	bool sph_sph_correction = false;
+	bool compute_wetness = true;
 
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 
@@ -236,7 +237,8 @@ bool Simulation::StepCUDA(float dt)
 		dt,
 		m_iterations,
 		correct_dem,
-		sph_sph_correction
+		sph_sph_correction,
+		compute_wetness
 		);
 
 	/*
@@ -392,7 +394,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->num_cells = m_neighbor_searcher->m_num_grid_cells;
 	m_sim_params->world_origin = make_float3(0, 0, 0);
 	m_sim_params->cell_size = make_float3(m_sim_params->effective_radius);
-	m_sim_params->boundary_damping = 0.5f;
+	m_sim_params->boundary_damping = 0.05f;
 	
 	//coupling coefficients
 	//m_sim_params->sph_dem_corr = 0.05f;
@@ -408,6 +410,13 @@ void Simulation::SetupSimParams()
 	m_sim_params->poly6_G = (-945.0f / (32.0f * M_PI * glm::pow(effective_radius, 9)));
 	m_sim_params->spiky = (15.0f / (M_PI * glm::pow(effective_radius, 6)));
 	m_sim_params->spiky_G = (-45.0f / (M_PI * glm::pow(effective_radius, 6)));
+
+	// wetness settings
+	m_sim_params->wetness_max = 1.f;
+	m_sim_params->wetness_threshold = 0.5f;
+	m_sim_params->k_p = 0.5f;
+	m_sim_params->k_bridge = 0.5f;
+
 
 	m_particle_system->setParticleRadius(particle_radius);
 

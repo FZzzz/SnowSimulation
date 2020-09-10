@@ -147,6 +147,8 @@ void ParticleSystem::SetupCUDAMemory()
 {
 	// Fluid paritcles
 	{
+		size_t n = m_particles->m_size;
+
 		//glm::vec3* prev_positions = m_particles->m_prev_positions.data();
 		glm::vec3* positions = m_particles->m_positions.data();
 		glm::vec3* predict_positions = m_particles->m_predict_positions.data();
@@ -161,8 +163,9 @@ void ParticleSystem::SetupCUDAMemory()
 		float* C = m_particles->m_C.data();
 		float* lambda = m_particles->m_lambda.data();
 
-		size_t n = m_particles->m_size;
-
+		m_particles->m_wetness.resize(n, 1.f);
+		m_particles->m_num_neighbors.resize(n, 0);
+		
 		// m_positions is the map/unmap target. we don't setup right here
 		// Allocate memory spaces
 		cudaMalloc(
@@ -213,6 +216,16 @@ void ParticleSystem::SetupCUDAMemory()
 		cudaMalloc(
 			(void**)&(m_particles->m_d_correction),
 			n * sizeof(float3)
+		);
+
+		cudaMalloc(
+		(void**)&(m_particles->m_d_wetness),
+			n * sizeof(float)
+		);
+		
+		cudaMalloc(
+		(void**)&(m_particles->m_d_num_neighbors),
+			n * sizeof(float)
 		);
 
 		// Set value
@@ -290,11 +303,28 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 		);
+
+		cudaMemcpy(
+		(void*)m_particles->m_d_wetness,
+			(void*)m_particles->m_wetness.data(),
+			n * sizeof(float),
+			cudaMemcpyHostToDevice
+		);
+
+		cudaMemcpy(
+		(void*)m_particles->m_d_wetness,
+			(void*)m_particles->m_num_neighbors.data(),
+			n * sizeof(float),
+			cudaMemcpyHostToDevice
+		);
+
 	}// end of fluid particle settings
 
 	// DEM particles
 	if(m_dem_particles != nullptr)
 	{
+		size_t n = m_dem_particles->m_size;
+
 		glm::vec3* positions = m_dem_particles->m_positions.data();
 		glm::vec3* predict_positions = m_dem_particles->m_predict_positions.data();
 		glm::vec3* new_positions = m_dem_particles->m_new_positions.data();
@@ -308,7 +338,8 @@ void ParticleSystem::SetupCUDAMemory()
 		float* C = m_dem_particles->m_C.data();
 		float* lambda = m_dem_particles->m_lambda.data();
 
-		size_t n = m_dem_particles->m_size;
+		m_dem_particles->m_wetness.resize(n, 0.f);
+		m_dem_particles->m_num_neighbors.resize(n, 0);
 
 		// m_positions is the map/unmap target. we don't setup right here
 		// Allocate memory spaces
@@ -360,6 +391,16 @@ void ParticleSystem::SetupCUDAMemory()
 		cudaMalloc(
 		(void**)&(m_dem_particles->m_d_correction),
 			n * sizeof(float3)
+			);
+
+		cudaMalloc(
+		(void**)&(m_dem_particles->m_d_wetness),
+			n * sizeof(float)
+			);
+
+		cudaMalloc(
+		(void**)&(m_dem_particles->m_d_num_neighbors),
+			n * sizeof(float)
 			);
 
 		// Set value
@@ -435,6 +476,20 @@ void ParticleSystem::SetupCUDAMemory()
 		(void*)m_dem_particles->m_d_correction,
 			(void*)velocity,
 			n * sizeof(float3),
+			cudaMemcpyHostToDevice
+			);
+
+		cudaMemcpy(
+		(void*)m_dem_particles->m_d_wetness,
+			(void*)m_dem_particles->m_wetness.data(),
+			n * sizeof(float),
+			cudaMemcpyHostToDevice
+			);
+
+		cudaMemcpy(
+		(void*)m_dem_particles->m_d_wetness,
+			(void*)m_dem_particles->m_num_neighbors.data(),
+			n * sizeof(float),
 			cudaMemcpyHostToDevice
 			);
 	}// end of DEM particle setting
