@@ -36,16 +36,16 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_particle_system = particle_system;
 	
 	uint3 grid_size = make_uint3(64, 64, 64);
-	glm::vec3 fluid_half_extends = glm::vec3(0.9998f, 0.1f, 0.9998f);
+	glm::vec3 fluid_half_extends = glm::vec3(0.25f, 0.3f, 0.99f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
-	glm::vec3 fluid_origin = glm::vec3(0.0f, 1.112f, 0.0f);
-	glm::vec3 snow_origin = glm::vec3(0.f, 0.25f, 0.0f);
+	glm::vec3 fluid_origin = glm::vec3(-0.725f, 0.35f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.5f, 0.251f, 0.0f);
 	
 	m_neighbor_searcher = std::make_shared<NeighborSearch>(m_particle_system, grid_size);
 	m_solver = std::make_shared<ConstraintSolver>(mode);
 
 	SetupSimParams();
-	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, true);
+	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, false);
 	GenerateParticleCube(snow_half_extends, snow_origin, 1, false);
 	InitializeBoundaryParticles();
 
@@ -137,9 +137,10 @@ bool Simulation::StepCUDA(float dt)
 		return true;
 
 	bool cd_on = true;
-	bool correct_dem = false;
+	bool correct_dem = true;
 	bool sph_sph_correction = false;
-	bool compute_wetness = true;
+	//bool compute_wetness = false;
+	bool dem_friction = true;
 
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 
@@ -165,6 +166,7 @@ bool Simulation::StepCUDA(float dt)
 	size_t num_bytes;
 	cudaGraphicsResourceGetMappedPointer((void**)&(sph_particles->m_d_positions), &num_bytes, *sph_vbo_resource);
 	cudaGraphicsResourceGetMappedPointer((void**)&(dem_particles->m_d_positions), &num_bytes, *dem_vbo_resource);
+	//cudaGraphicsResourceGetMappedPointer((void**)&(dem_particles->m_d_wetness), &num_bytes, dem_vbo_resource[1]);
 	cudaGraphicsResourceGetMappedPointer((void**)&(boundary_particles->m_d_positions), &num_bytes, *b_vbo_resource);
 	
 	// Integrate
@@ -238,7 +240,7 @@ bool Simulation::StepCUDA(float dt)
 		m_iterations,
 		correct_dem,
 		sph_sph_correction,
-		compute_wetness
+		dem_friction
 		);
 
 	/*
@@ -360,9 +362,9 @@ void Simulation::setClipLength(int length)
 void Simulation::SetupSimParams()
 {
 	//const size_t n_particles = 1000;
-	const float particle_mass = 0.015f;
+	const float particle_mass = 0.035f;
 	const float n_kernel_particles = 20.f;	
-	const float dem_sph_ratio = 1.25f;
+	const float dem_sph_ratio = 0.1f;
 	// water density = 1000 kg/m^3
 	m_rest_density = 1000.f; 
 	m_sph_particle_mass = particle_mass;
@@ -383,7 +385,7 @@ void Simulation::SetupSimParams()
 
 	m_sim_params->gravity = make_float3(0.f, -9.8f, 0.f);
 	m_sim_params->global_damping = 1.f;
-	m_sim_params->maximum_speed = 500.f;
+	m_sim_params->maximum_speed = 50.f;
 
 	m_sim_params->particle_radius = particle_radius;
 	m_sim_params->effective_radius = effective_radius;
@@ -394,7 +396,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->num_cells = m_neighbor_searcher->m_num_grid_cells;
 	m_sim_params->world_origin = make_float3(0, 0, 0);
 	m_sim_params->cell_size = make_float3(m_sim_params->effective_radius);
-	m_sim_params->boundary_damping = 0.05f;
+	m_sim_params->boundary_damping = 0.98f;
 	
 	//coupling coefficients
 	//m_sim_params->sph_dem_corr = 0.05f;
@@ -403,8 +405,8 @@ void Simulation::SetupSimParams()
 	m_sim_params->kinematic_friction = 0.75f;
 
 	m_sim_params->scorr_coeff = 0.1f;
-	m_sim_params->sor_coeff = 1.0f * (1.f/4.f);
-	m_sim_params->viscosity = 0.001f;
+	m_sim_params->sor_coeff = 1.0f * (1.f/8.f);
+	m_sim_params->viscosity = 0.01f;
 
 	m_sim_params->poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));
 	m_sim_params->poly6_G = (-945.0f / (32.0f * M_PI * glm::pow(effective_radius, 9)));
@@ -415,7 +417,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->wetness_max = 1.f;
 	m_sim_params->wetness_threshold = 0.5f;
 	m_sim_params->k_p = 0.5f;
-	m_sim_params->k_bridge = 0.5f;
+	m_sim_params->k_bridge = 20.f;
 
 
 	m_particle_system->setParticleRadius(particle_radius);

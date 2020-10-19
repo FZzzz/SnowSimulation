@@ -103,6 +103,7 @@ void ParticleSystem::Release()
 		cudaFree(m_dem_particles->m_d_lambda);
 
 		cudaGraphicsUnregisterResource(m_dem_cuda_vbo_resource);
+		//cudaGraphicsUnregisterResource(m_dem_cuda_vbo_resource[1]);
 		delete m_dem_particles;
 	}
 
@@ -333,7 +334,7 @@ void ParticleSystem::SetupCUDAMemory()
 		glm::vec3* force = m_dem_particles->m_force.data();
 
 		float* mass = m_dem_particles->m_mass.data();
-		float* massInv = m_dem_particles->m_massInv.data();
+		float* massInv = m_dem_particles->m_massInv.data(); 
 		float* density = m_dem_particles->m_density.data();
 		float* C = m_dem_particles->m_C.data();
 		float* lambda = m_dem_particles->m_lambda.data();
@@ -583,8 +584,11 @@ void ParticleSystem::RegisterCUDAVBO()
 {
 	if(m_particles)
 		cudaGraphicsGLRegisterBuffer(&m_sph_cuda_vbo_resource, m_sph_vbo, cudaGraphicsMapFlagsNone);
-	if(m_dem_particles)
+	if (m_dem_particles)
+	{
 		cudaGraphicsGLRegisterBuffer(&m_dem_cuda_vbo_resource, m_dem_vbo, cudaGraphicsMapFlagsNone);
+		//cudaGraphicsGLRegisterBuffer(&m_dem_cuda_vbo_resource[1], m_dem_vbo[1], cudaGraphicsMapFlagsNone);
+	}
 	if(m_boundary_particles)
 		cudaGraphicsGLRegisterBuffer(&m_boundary_cuda_vbo_resource, m_boundary_vbo, cudaGraphicsMapFlagsNone);
 }
@@ -627,16 +631,19 @@ void ParticleSystem::UpdateGLBUfferData()
 
 	if (m_dem_particles != nullptr && m_dem_particles->m_size != 0)
 	{
+		size_t n = m_dem_particles->m_positions.size();
+
 		glBindVertexArray(m_dem_vao);
 
 		glBindBuffer(GL_ARRAY_BUFFER, m_dem_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * m_dem_particles->m_positions.size(),
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * n,
 			m_dem_particles->m_positions.data(), GL_DYNAMIC_DRAW);
 
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0); // unbind vbo[0]
+			
 		glBindVertexArray(0);
 	}
 

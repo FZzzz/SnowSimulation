@@ -38,6 +38,7 @@ public:
 
 	inline GLuint getDEMVAO() { return m_dem_vao; };
 	inline GLuint getDEMVBO() { return m_dem_vbo; };
+	//inline GLuint getDEMVBO_1() { return m_dem_vbo[1]; };
 	inline GLuint getDEMEBO() { return m_dem_ebo; };
 
 	inline GLuint getBoundaryVAO() { return m_boundary_vao; };
@@ -78,6 +79,7 @@ private:
 	GLuint m_sph_ebo;
 
 	GLuint m_dem_vao;
+	//GLuint m_dem_vbo[2];
 	GLuint m_dem_vbo;
 	GLuint m_dem_ebo;
 
@@ -86,12 +88,15 @@ private:
 	GLuint m_boundary_ebo;
 		
 	GLuint m_sph_cuda_vbo;
+	//GLuint m_dem_cuda_vbo[2];
 	GLuint m_dem_cuda_vbo;
 	GLuint m_boundary_cuda_vbo;
 	
 	struct cudaGraphicsResource* m_sph_cuda_vbo_resource;
 	struct cudaGraphicsResource* m_dem_cuda_vbo_resource;
 	struct cudaGraphicsResource* m_boundary_cuda_vbo_resource;
+
+	//struct cudaGraphicsResource* m_dem_color_vbo_res;
 	
 	double m_update_elased_time;
 };

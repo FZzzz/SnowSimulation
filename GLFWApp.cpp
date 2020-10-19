@@ -127,6 +127,10 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	point_shader->SetupShader("resources/shader/point_sprite_vs.glsl", 
 		"resources/shader/point_sprite_fs.glsl");
 
+	std::shared_ptr<Shader> wet_point_shader = std::make_shared<Shader>("WetPointSprite");
+	wet_point_shader->SetupShader("resources/shader/wetness_point_sprite_vs.glsl",
+		"resources/shader/point_sprite_fs.glsl");
+
 	auto mat_uniform = glGetUniformBlockIndex(shadow_mapping_shader->getProgram(), "Matrices");
 	GLuint ubo;
 	glGenBuffers(1, &ubo);
@@ -217,7 +221,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 
 	// Simulation control settings
 	{
-		uint32_t iterations = 5;
+		uint32_t iterations = 6;
 		int clip_length = 200000;
 		m_simulator->SetSolverIteration(iterations);
 		m_simulator->setClipLength(clip_length);
@@ -396,8 +400,8 @@ void Mouse_scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
 	auto camera = GLFWApp::getInstance()->getMainCamera();
 
-	//camera->Zoom(0.1f * yoffset);
-	camera->MoveForward(-0.1f * yoffset);
+	camera->Zoom(-0.1f * yoffset);
+	//camera->MoveForward(-0.1f * yoffset);
 }
 
 void GLFWApp::Render()
@@ -416,7 +420,7 @@ void GLFWApp::Update()
 	
 	float dt = m_currentTime - m_previousTime;
 
-	const float time_step = 0.001f;
+	const float time_step = 0.0005f;
 #ifdef _USE_CUDA_
 	m_simulator->StepCUDA(time_step);
 #else

@@ -108,7 +108,7 @@ void snow_simulation(
     int          iterations,
     bool         correct_dem,
     bool         sph_sph_correction,
-    bool         compute_wetness
+    bool         dem_friction
 );
 
 #endif

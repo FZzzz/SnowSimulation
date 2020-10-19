@@ -1590,10 +1590,14 @@ void sort_particles(CellData cell_data, uint numParticles)
 {
 	uint* grid_hash = cell_data.grid_hash;
 	uint* grid_index = cell_data.grid_index;
+
+	thrust::device_ptr<uint> d_hash_ptr = thrust::device_pointer_cast(cell_data.grid_hash);
+	thrust::device_ptr<uint> d_index_ptr = thrust::device_pointer_cast(cell_data.grid_index);
+
 	thrust::sort_by_key(
-		thrust::device_ptr<uint>(grid_hash),
-		thrust::device_ptr<uint>(grid_hash + numParticles), 
-		thrust::device_ptr<uint>(grid_index)
+		d_hash_ptr,
+		d_hash_ptr + numParticles, 
+		d_index_ptr		
 	);
 }
 
@@ -2412,6 +2416,7 @@ void compute_snow_sph_density_d(
 	// get address in grid
 	int3 gridPos = calcGridPos(pos);
 
+#pragma unroll
 	// traverse 27 neighbors (fluid - fluid)
 	for (int z = -1; z <= 1; z++)
 	{
@@ -2430,6 +2435,7 @@ void compute_snow_sph_density_d(
 		}
 	}
 
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -2449,6 +2455,7 @@ void compute_snow_sph_density_d(
 		}
 	}
 
+#pragma unroll
 	// use gridPos to traverse 27 surrounding grids (fluid - boundary)
 	for (int z = -1; z <= 1; z++)
 	{
@@ -2516,6 +2523,7 @@ void compute_snow_dem_sph_density_d(
 	// get address in grid of boundary particles (basically the same as fluid particle)
 	int3 gridPos = calcGridPos(pos);
 
+#pragma unroll
 	// dem-dem
 	for (int z = -1; z <= 1; z++)
 	{
@@ -2534,6 +2542,8 @@ void compute_snow_dem_sph_density_d(
 		}
 	}
 	//printf("dem_mass: %f\n", dem_mass[originalIndex]);
+
+#pragma unroll
 	// dem-sph
 	for (int z = -1; z <= 1; z++)
 	{
@@ -2554,6 +2564,7 @@ void compute_snow_dem_sph_density_d(
 		}
 	}
 
+#pragma unroll
 	// boundary
 	for (int z = -1; z <= 1; z++)
 	{
@@ -2619,6 +2630,7 @@ void compute_snow_boundary_density_d(
 	// get address in grid of boundary particles (basically the same as fluid particle)
 	int3 gridPos = calcGridPos(pos);
 
+#pragma unroll
 	// use gridPos to traverse 27 surrounding grids (boundary - boundary)
 	for (int z = -1; z <= 1; z++)
 	{
@@ -2638,6 +2650,7 @@ void compute_snow_boundary_density_d(
 		}
 	}
 
+#pragma unroll
 	//boundary-dem
 	for (int z = -1; z <= 1; z++)
 	{
@@ -2658,7 +2671,7 @@ void compute_snow_boundary_density_d(
 		}
 	}
 
-
+#pragma unroll
 	// boundary-sph
 	for (int z = -1; z <= 1; z++)
 	{
@@ -2782,7 +2795,9 @@ void compute_snow_sph_lambdas_d(
 	//-(1.f / params.rest_density) *
 	//Poly6_W_Gradient_CUDA(make_float3(0, 0, 0), 0, params.effective_radius);
 	float gradientC_sum = dot(gradientC_i, gradientC_i);
+	
 	// traverse 27 neighbors
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -2801,6 +2816,7 @@ void compute_snow_sph_lambdas_d(
 	}
 
 	// sph-dem
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -2819,6 +2835,7 @@ void compute_snow_sph_lambdas_d(
 	}
 
 	// traverse 27 neighbors in "boundary cells"
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -2879,6 +2896,7 @@ void compute_dem_sph_lambdas_d(
 	float gradientC_sum = dot(gradientC_i, gradientC_i);
 
 	// dem-dem
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -2897,6 +2915,7 @@ void compute_dem_sph_lambdas_d(
 	}
 
 	// dem-sph
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -2917,6 +2936,7 @@ void compute_dem_sph_lambdas_d(
 	}
 
 	//dem-boundary
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -2979,6 +2999,7 @@ void compute_snow_boundary_lambdas_d(
 	float gradientC_sum = dot(gradientC_i, gradientC_i);
 
  	// traverse 27 neighbors in boundary cells (boundary - boundary)
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -3000,6 +3021,7 @@ void compute_snow_boundary_lambdas_d(
 	}
 
 	// boundary-sph
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -3020,6 +3042,7 @@ void compute_snow_boundary_lambdas_d(
 	}
 
 	// boundary-dem
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -3248,6 +3271,7 @@ void compute_snow_sph_position_correction(
 
 	// traverse 27 neighbors
 	// sph-sph
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -3267,6 +3291,7 @@ void compute_snow_sph_position_correction(
 
 	
 	//sph-dem is corrected by non-penetration constraint
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -3290,6 +3315,7 @@ void compute_snow_sph_position_correction(
 	
 
 	// sph-boundary
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -3345,6 +3371,7 @@ void compute_dem_sph_position_correction(
 
 	bool proceed = false;
 	
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -3365,6 +3392,7 @@ void compute_dem_sph_position_correction(
 	if (proceed)
 	{
 		// dem-dem
+#pragma unroll
 		for (int z = -1; z <= 1; z++)
 		{
 			for (int y = -1; y <= 1; y++)
@@ -3383,6 +3411,7 @@ void compute_dem_sph_position_correction(
 		}
 
 		// dem-sph
+#pragma unroll
 		for (int z = -1; z <= 1; z++)
 		{
 			for (int y = -1; y <= 1; y++)
@@ -3406,6 +3435,7 @@ void compute_dem_sph_position_correction(
 	}
 
 	// dem-boundary is corrected by non penetration constraint
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -3667,6 +3697,7 @@ void xsph_viscosity(
 	float3 corr = make_float3(0, 0, 0);
 
 	// viscosity with sph particles
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -3687,7 +3718,7 @@ void xsph_viscosity(
 	}
 
 	// viscosity with dem particles
-	
+#pragma unroll
 	for (int z = -1; z <= 1; z++)
 	{
 		for (int y = -1; y <= 1; y++)
@@ -3793,325 +3824,6 @@ void counting_neighbors_d(
 	neighbor_count0[original_index] = count;
 }
 
-
-inline __device__
-float propagate_wetness_cell(
-	int3    grid_pos,
-	uint    index,
-	float3  pos,
-	float*	wetness,
-	float*	neighbor_count,
-	CellData cell_data,
-	float dt,
-	bool coupling=false
-)
-{
-	uint grid_hash = calcGridHash(grid_pos);
-
-	// get start of bucket for this cell
-	uint start_index = cell_data.cell_start[grid_hash];
-	float res = 0;
-
-	if (start_index != 0xffffffff)          // cell is not empty
-	{
-		// iterate over particles in this cell
-		uint end_index = cell_data.cell_end[grid_hash];
-
-		for (uint j = start_index; j < end_index; j++)
-		{
-			if (coupling || (j != index))
-			{
-				uint original_index_j = cell_data.grid_index[j];
-
-				float3 pos2 = cell_data.sorted_pos[j];
-				//float3 vec = pos - pos2;
-				float dist = length(pos - pos2);
-				
-				if (dist <= 2.f * params.particle_radius)
-				{
-					float dw = wetness[original_index_j] - params.wetness_threshold;
-					res += params.k_p * dt * dw / neighbor_count[original_index_j];
-				}
-				
-			}
-			
-		}
-
-	}
-	return res;
-}
-
-__global__
-void propagate_wetness_d(
-	float* sph_wetness,
-	float* dem_wetness,
-	float* sph_neighbor_count,
-	float* dem_neighbor_count,
-	CellData sph_cell_data,
-	CellData dem_cell_data,
-	uint dem_num_particles,
-	float dt
-	)
-{
-	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
-
-	if (index >= dem_num_particles)
-		return;
-
-	uint original_index = dem_cell_data.grid_index[index];
-
-	// read particle data from sorted arrays
-	float3 pos = dem_cell_data.sorted_pos[index];
-	float w_i = dem_wetness[original_index];
-
-	// get address in grid
-	int3 gridPos = calcGridPos(pos);
-
-	// lock critical section
-	cg::thread_block cta = cg::this_thread_block();
-	float change = 0.f;
-
-	// wet propagation between neighbors (dem->dem)
-	for (int z = -1; z <= 1; z++)
-	{
-		for (int y = -1; y <= 1; y++)
-		{
-			for (int x = -1; x <= 1; x++)
-			{
-				int3 neighbor_pos = gridPos + make_int3(x, y, z);
-				change += propagate_wetness_cell(
-					gridPos,
-					index,
-					pos,
-					dem_wetness,
-					dem_neighbor_count,
-					dem_cell_data, dt
-					);
-			}
-		}
-	}
-
-	// (sph->dem)
-	for (int z = -1; z <= 1; z++)
-	{
-		for (int y = -1; y <= 1; y++)
-		{
-			for (int x = -1; x <= 1; x++)
-			{
-				int3 neighbor_pos = gridPos + make_int3(x, y, z);
-				change += propagate_wetness_cell(
-					gridPos,
-					index,
-					pos,
-					sph_wetness,
-					sph_neighbor_count,
-					sph_cell_data, dt
-					);
-			}
-		}
-	}
-
-	// wait & sync
-	cg::sync(cta);
-
-	if (w_i + change >= params.wetness_max)
-		dem_wetness[original_index] = params.wetness_max;
-	else
-		dem_wetness[original_index] += change;
-	
-}
-
-inline __device__
-float3 wetness_force_cell(
-	int3    grid_pos,
-	uint    index,
-	float3  pos0,
-	float3  v_i,
-	float   w_i,
-	float3* velocity,
-	float*  wetness,
-	CellData cell_data,
-	float dt,
-	bool  coupling = false
-)
-{
-	uint grid_hash = calcGridHash(grid_pos);
-
-	// get start of bucket for this cell
-	uint start_index = cell_data.cell_start[grid_hash];
-	float3 res = make_float3(0, 0, 0);
-
-	if (start_index != 0xffffffff)          // cell is not empty
-	{
-		// iterate over particles in this cell
-		uint end_index = cell_data.cell_end[grid_hash];
-
-		for (uint j = start_index; j < end_index; j++)
-		{
-			if (coupling || (j != index))
-			{
-				uint original_index_j = cell_data.grid_index[j];
-
-				float3 pos1 = cell_data.sorted_pos[j];
-				//float3 vec = pos - pos2;
-				const float3 dx = pos1 - pos0;
-				const float3 dv = velocity[original_index_j] - v_i;
-
-				const float w_j = wetness[original_index_j];
-				float dist = length(dx);
-				if (dist < 2.f * params.particle_radius && dot(dv, dx) > 0)
-				{
-					res += max(0.f, (params.wetness_threshold - (w_i + w_j) / 2.f) ) * dv;
-				}
-
-			}
-
-		}
-
-	}
-	return res;
-}
-
-
-__global__
-void compute_wetness_correction(
-	float3* dem_correction,
-	float3* sph_velocity,
-	float3* dem_velocity,
-	float* dem_mass,
-	float* sph_wetness,
-	float* dem_wetness,
-	float* sph_neighbor_count,
-	float* dem_neighbor_count,
-	CellData sph_cell_data,
-	CellData dem_cell_data,
-	uint dem_num_particles,
-	float dt
-	)
-{
-	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
-
-	if (index >= dem_num_particles)
-		return;
-
-	uint original_index = dem_cell_data.grid_index[index];
-
-	// read particle data from sorted arrays
-	float3 pos = dem_cell_data.sorted_pos[index];
-	float3 v_i = dem_velocity[original_index];
-	float w_i = dem_wetness[original_index];
-	
-	// get address in grid
-	int3 gridPos = calcGridPos(pos);
-
-	float change = 0.f;
-	float3 force = make_float3(0, 0, 0);
-
-	float3 corr = make_float3(0, 0, 0);
-
-	// wet propagation between neighbors (dem->dem)
-	for (int z = -1; z <= 1; z++)
-	{
-		for (int y = -1; y <= 1; y++)
-		{
-			for (int x = -1; x <= 1; x++)
-			{
-				int3 neighbor_pos = gridPos + make_int3(x, y, z);
-				force += wetness_force_cell(
-					gridPos, index, 
-					pos, v_i, w_i,
-					dem_velocity, dem_wetness,
-					dem_cell_data, 
-					dt,
-					false
-					);
-			}
-		}
-	}
-
-	// (sph->dem)
-	for (int z = -1; z <= 1; z++)
-	{
-		for (int y = -1; y <= 1; y++)
-		{
-			for (int x = -1; x <= 1; x++)
-			{
-				int3 neighbor_pos = gridPos + make_int3(x, y, z);
-				force += wetness_force_cell(
-					gridPos, index, 
-					pos, v_i, w_i,
-					sph_velocity, sph_wetness, 
-					sph_cell_data, 
-					dt,
-					true
-					);
-			}
-		}
-	}
-
-	// integration
-	float3 vel = (force / dem_mass[original_index]) * dt;
-	corr = vel * dt;
-
-	dem_correction[original_index] += corr;
-}
-
-
-void propagate_wetness(
-	ParticleSet* sph_particles,
-	ParticleSet* dem_particles,
-	CellData sph_cell_data,
-	CellData dem_cell_data,
-	uint sph_num_particles,
-	uint dem_num_particles,
-	float dt
-)
-{
-	uint sph_num_threads, sph_num_blocks;
-	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, sph_num_blocks, sph_num_threads);
-	uint dem_num_threads, dem_num_blocks;
-	compute_grid_size(dem_num_particles, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
-
-	counting_neighbors_d <<<dem_num_blocks, dem_num_threads>>>(
-		dem_particles->m_d_num_neighbors, 
-		dem_cell_data, sph_cell_data, 
-		dem_num_particles
-	);
-	counting_neighbors_d <<<sph_num_blocks, sph_num_threads>>>(
-		sph_particles->m_d_num_neighbors, 
-		sph_cell_data, dem_cell_data, 
-		sph_num_particles
-	);
-
-	// propagation only exist between dem->dem sph->dem (sph are considered as max in any time)
-	propagate_wetness_d << <dem_num_blocks, dem_num_threads >> > (
-		sph_particles->m_d_wetness,
-		dem_particles->m_d_wetness,
-		sph_particles->m_d_num_neighbors,
-		dem_particles->m_d_num_neighbors,
-		sph_cell_data,
-		dem_cell_data,
-		dem_num_particles,
-		dt
-	);
-
-	//correct_with_wetness
-	compute_wetness_correction << <dem_num_blocks, dem_num_threads >> > (
-		dem_particles->m_d_correction,
-		sph_particles->m_d_velocity,
-		dem_particles->m_d_velocity,
-		dem_particles->m_d_mass,
-		sph_particles->m_d_wetness,
-		dem_particles->m_d_wetness,
-		sph_particles->m_d_num_neighbors,
-		dem_particles->m_d_num_neighbors,
-		sph_cell_data,
-		dem_cell_data,
-		dem_num_particles,
-		dt
-	);
-}
-
 void snow_simulation(
 	ParticleSet* sph_particles,
 	ParticleSet* dem_particles, 
@@ -4126,20 +3838,33 @@ void snow_simulation(
 	int iterations,
 	bool correct_dem,
 	bool sph_sph_correction,
-	bool compute_wetness
+	//bool compute_wetness,
+	bool dem_friction
 )
 {
 	uint sph_num_threads, sph_num_blocks;
 	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, sph_num_blocks, sph_num_threads);
 	uint dem_num_threads, dem_num_blocks;
 	compute_grid_size(dem_num_particles, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
+	/*
+	sort_and_reorder(
+		dem_particles->m_d_predict_positions,
+		dem_cell_data,
+		dem_num_particles
+	);
+	sort_and_reorder(
+		sph_particles->m_d_predict_positions,
+		sph_cell_data,
+		sph_num_particles
+	);
+	*/
 
 	for (int i = 0; i < iterations; ++i)
 	{
 		//Search again for stability
-		/*
-		if (i != 0)
-		{
+		
+//		if (i != 0)
+//		{
 			sort_and_reorder(
 				dem_particles->m_d_predict_positions,
 				dem_cell_data,
@@ -4151,8 +3876,8 @@ void snow_simulation(
 				sph_cell_data,
 				sph_num_particles
 			);
-		}
-		*/
+//		}
+		
 		compute_snow_pbf_density(
 			sph_particles,
 			dem_particles,
@@ -4224,62 +3949,31 @@ void snow_simulation(
 
 	}
 
-	sort_and_reorder(
-		dem_particles->m_d_predict_positions,
-		dem_cell_data,
-		dem_num_particles
-	);
-
-	sort_and_reorder(
-		sph_particles->m_d_predict_positions,
-		sph_cell_data,
-		sph_num_particles
-	);
-
-	compute_friction_correction << <dem_num_blocks, dem_num_threads >> > (
-		dem_particles->m_d_correction,
-		dem_particles->m_d_new_positions,
-		dem_particles->m_d_positions,
-		dem_particles->m_d_massInv,
-		boundary_particles->m_d_massInv,
-		dem_cell_data,
-		b_cell_data,
-		dem_num_particles
-		);
-	getLastCudaError("Kernel execution failed: compute_friction_correction ");
-
-	apply_correction << <dem_num_blocks, dem_num_threads >> > (
-		dem_particles->m_d_new_positions,
-		dem_particles->m_d_predict_positions,
-		dem_particles->m_d_correction,
-		dem_cell_data,
-		dem_num_particles
-		);
-	getLastCudaError("Kernel execution failed: apply_correction ");
-
-
-	sort_and_reorder(
-		dem_particles->m_d_predict_positions,
-		dem_cell_data,
-		dem_num_particles
-	);
-	sort_and_reorder(
-		sph_particles->m_d_predict_positions,
-		sph_cell_data,
-		sph_num_particles
-		);
-	if (compute_wetness)
+	if (dem_friction)
 	{
-		// force-based wetness correction for dem particles
-		propagate_wetness(
-			sph_particles,
-			dem_particles,
-			sph_cell_data,
+		sort_and_reorder(
+			dem_particles->m_d_predict_positions,
 			dem_cell_data,
-			sph_num_particles,
-			dem_num_particles,
-			dt
+			dem_num_particles
+		);
+
+		sort_and_reorder(
+			sph_particles->m_d_predict_positions,
+			sph_cell_data,
+			sph_num_particles
+		);
+
+		compute_friction_correction << <dem_num_blocks, dem_num_threads >> > (
+			dem_particles->m_d_correction,
+			dem_particles->m_d_new_positions,
+			dem_particles->m_d_positions,
+			dem_particles->m_d_massInv,
+			boundary_particles->m_d_massInv,
+			dem_cell_data,
+			b_cell_data,
+			dem_num_particles
 			);
+		getLastCudaError("Kernel execution failed: compute_friction_correction ");
 
 		apply_correction << <dem_num_blocks, dem_num_threads >> > (
 			dem_particles->m_d_new_positions,
@@ -4290,7 +3984,8 @@ void snow_simulation(
 			);
 		getLastCudaError("Kernel execution failed: apply_correction ");
 	}
-
+	/*
+	*/
 	// finialize corrections and compute velocity for next integration 
 	finalize_correction << <sph_num_blocks, sph_num_threads >> > (
 		sph_particles->m_d_positions,
