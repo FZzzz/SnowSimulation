@@ -3,7 +3,7 @@
 
 #include <cuda_runtime.h>
 #include "Particle.h"
-#include "Simulation.h"
+#include "SimParams.h"
 #include "NeighborSearch.h"
 //#include <helper_math.h>
 

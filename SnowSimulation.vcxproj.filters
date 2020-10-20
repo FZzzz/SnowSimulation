@@ -254,6 +254,9 @@
     <ClInclude Include="imgui\stb_truetype.h">
       <Filter>Header Files\Engine\imgui</Filter>
     </ClInclude>
+    <ClInclude Include="SimParams.h">
+      <Filter>Header Files\Engine\Physics</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="cuda_simulation.cu">

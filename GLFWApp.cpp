@@ -160,7 +160,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 		m_renderer = std::make_shared<Renderer>();
 		m_renderer->Initialize(m_resource_manager, m_particle_system, m_mainCamera, width, height);
 	}
-
+	/*
 	// Load Meshes
 	//std::shared_ptr<GameObject> obj = std::make_shared<GameObject>();	
 	{
@@ -174,6 +174,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 			SignalFail();
 		}
 	}
+	*/
 		
 	// Terrain Initilization
 	{
@@ -221,7 +222,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 
 	// Simulation control settings
 	{
-		uint32_t iterations = 6;
+		uint32_t iterations = 2;
 		int clip_length = 200000;
 		m_simulator->SetSolverIteration(iterations);
 		m_simulator->setClipLength(clip_length);

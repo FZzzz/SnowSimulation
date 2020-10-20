@@ -276,68 +276,6 @@ void reorderDataAndFindCellStartD(
 		cell_data.sorted_pos[index] = pos;
 	}
 }
-/*
-__global__
-void reorderData_boundary_D(
-	CellData cell_data,
-	float3* oldPos,           // input: sorted position array
-	uint    numParticles)
-{
-	// Handle to thread block group
-	cg::thread_block cta = cg::this_thread_block();
-	extern __shared__ uint sharedHash[];    // blockSize + 1 elements
-	uint index = __umul24(blockIdx.x, blockDim.x) + threadIdx.x;
-
-	uint hash;
-
-	// handle case when no. of particles not multiple of block size
-	if (index < numParticles)
-	{
-		hash = cell_data.grid_hash[index];
-
-		// Load hash data into shared memory so that we can look
-		// at neighboring particle's hash value without loading
-		// two hash values per thread
-		sharedHash[threadIdx.x + 1] = hash;
-
-		if (index > 0 && threadIdx.x == 0)
-		{
-			// first thread in block must load neighbor particle hash
-			sharedHash[0] = cell_data.grid_hash[index - 1];
-		}
-	}
-
-	cg::sync(cta);
-
-	if (index < numParticles)
-	{
-		// If this particle has a different cell index to the previous
-		// particle then it must be the first particle in the cell,
-		// so store the index of this particle in the cell.
-		// As it isn't the first particle, it must also be the cell end of
-		// the previous particle's cell
-
-		if (index == 0 || hash != sharedHash[threadIdx.x])
-		{
-			cell_data.cellStart[hash] = index;
-
-			if (index > 0)
-				cell_data.cell_end[sharedHash[threadIdx.x]] = index;
-		}
-
-		if (index == numParticles - 1)
-		{
-			cell_data.cell_end[hash] = index + 1;
-		}
-
-		// Now use the sorted index to reorder the pos data
-		uint sortedIndex = cell_data.grid_index[index];
-		float3 pos = oldPos[sortedIndex];
-
-		cell_data.sorted_pos[index] = pos;
-	}
-}
-*/
 
 __global__
 void compute_boundary_volume_d(
@@ -448,30 +386,6 @@ void sort_and_reorder(
 		num_particles
 	);
 }
-
-
-/*
-void reorderData_boundary(
-	CellData cell_data, 
-	float3* oldPos, 
-	uint numParticles, 
-	uint numCells)
-{
-	uint num_threads, num_blocks;
-	compute_grid_size(numParticles, MAX_THREAD_NUM, num_blocks, num_threads);
-
-	// set all cells to empty
-	checkCudaErrors(cudaMemset(cell_data.cellStart, 0xffffffff, numCells * sizeof(uint)));
-
-	uint smemSize = sizeof(uint) * (num_threads + 1);
-	reorderData_boundary_D << < num_blocks, num_threads, smemSize >> > (
-		cell_data,
-		oldPos,
-		numParticles);
-	getLastCudaError("Kernel execution failed: reorderDataAndFindCellStartD");
-
-}
-*/
 
 void compute_boundary_volume(CellData data, float* mass, float* volume, uint numParticles)
 {
@@ -1560,12 +1474,12 @@ void integrate_pbd(
 	if (cd_on)
 	{
 		integrate_pbd_cd_d << <num_blocks, num_threads >> > (
-			particles->m_d_positions,
-			particles->m_d_velocity,
-			particles->m_d_force,
-			particles->m_d_massInv,
-			particles->m_d_predict_positions,
-			particles->m_d_new_positions,
+			particles->m_device_data.m_d_positions,
+			particles->m_device_data.m_d_velocity,
+			particles->m_device_data.m_d_force,
+			particles->m_device_data.m_d_massInv,
+			particles->m_device_data.m_d_predict_positions,
+			particles->m_device_data.m_d_new_positions,
 			deltaTime,
 			numParticles
 			);
@@ -1573,12 +1487,12 @@ void integrate_pbd(
 	else
 	{
 		integrate_pbd_d << <num_blocks, num_threads >> > (
-			particles->m_d_positions,
-			particles->m_d_velocity,
-			particles->m_d_force,
-			particles->m_d_massInv,
-			particles->m_d_predict_positions,
-			particles->m_d_new_positions,
+			particles->m_device_data.m_d_positions,
+			particles->m_device_data.m_d_velocity,
+			particles->m_device_data.m_d_force,
+			particles->m_device_data.m_d_massInv,
+			particles->m_device_data.m_d_predict_positions,
+			particles->m_device_data.m_d_new_positions,
 			deltaTime,
 			numParticles
 			);
@@ -1625,7 +1539,7 @@ void solve_sph_fluid(
 		{
 			calculate_hash(
 				sph_cell_data,
-				sph_particles->m_d_predict_positions,
+				sph_particles->m_device_data.m_d_predict_positions,
 				numParticles
 				);
 			sort_particles(
@@ -1635,7 +1549,7 @@ void solve_sph_fluid(
 			reorder_data(
 				sph_cell_data,
 				//particles->m_d_positions,
-				sph_particles->m_d_predict_positions,
+				sph_particles->m_device_data.m_d_predict_positions,
 				numParticles,
 				(64 * 64 * 64)
 				);
@@ -1645,10 +1559,10 @@ void solve_sph_fluid(
 		// compute density
 		//t1 = std::chrono::high_resolution_clock::now();
 		compute_density_d << <num_blocks, num_threads >> > (
-			sph_particles->m_d_density, 
-			sph_particles->m_d_mass, 
-			sph_particles->m_d_C,
-			boundary_particles->m_d_volume,
+			sph_particles->m_device_data.m_d_density,
+			sph_particles->m_device_data.m_d_mass,
+			sph_particles->m_device_data.m_d_C,
+			boundary_particles->m_device_data.m_d_volume,
 			sph_cell_data,
 			b_cell_data,
 			numParticles
@@ -1656,11 +1570,11 @@ void solve_sph_fluid(
 		getLastCudaError("Kernel execution failed: compute_density_d ");
 		// compute density contributed by boundary particles
 		compute_boundary_density_d << <b_num_blocks, b_num_threads >> > (
-			sph_particles->m_d_mass,
-			boundary_particles->m_d_mass,
-			boundary_particles->m_d_volume,
-			boundary_particles->m_d_C,
-			boundary_particles->m_d_density,
+			sph_particles->m_device_data.m_d_mass,
+			boundary_particles->m_device_data.m_d_mass,
+			boundary_particles->m_device_data.m_d_volume,
+			boundary_particles->m_device_data.m_d_C,
+			boundary_particles->m_device_data.m_d_density,
 			sph_cell_data,
 			b_cell_data,
 			b_num_particles
@@ -1670,21 +1584,21 @@ void solve_sph_fluid(
 		//t2 = std::chrono::high_resolution_clock::now();
 		// compute lambda
  		compute_lambdas_d << <num_blocks, num_threads >> > (
-			sph_particles->m_d_lambda,
-			sph_particles->m_d_C,
-			sph_particles->m_d_mass,
-			boundary_particles->m_d_volume,
+			sph_particles->m_device_data.m_d_lambda,
+			sph_particles->m_device_data.m_d_C,
+			sph_particles->m_device_data.m_d_mass,
+			boundary_particles->m_device_data.m_d_volume,
 			sph_cell_data,
 			b_cell_data,
 			numParticles
 			);
 		getLastCudaError("Kernel execution failed: compute_lambdas_d ");
 		compute_boundary_lambdas_d << <b_num_blocks, b_num_threads >> > (
-			boundary_particles->m_d_lambda,
-			boundary_particles->m_d_volume,
-			boundary_particles->m_d_positions,
-			boundary_particles->m_d_C,
-			boundary_particles->m_d_mass,
+			boundary_particles->m_device_data.m_d_lambda,
+			boundary_particles->m_device_data.m_d_volume,
+			boundary_particles->m_device_data.m_d_positions,
+			boundary_particles->m_device_data.m_d_C,
+			boundary_particles->m_device_data.m_d_mass,
 			b_cell_data,
 			sph_cell_data,
 			b_num_particles
@@ -1693,9 +1607,9 @@ void solve_sph_fluid(
 		//t3 = std::chrono::high_resolution_clock::now();
 		// compute new position
 		compute_position_correction << <num_blocks, num_threads >> > (
-			sph_particles->m_d_lambda,
-			boundary_particles->m_d_lambda,
-			sph_particles->m_d_correction,
+			sph_particles->m_device_data.m_d_lambda,
+			boundary_particles->m_device_data.m_d_lambda,
+			sph_particles->m_device_data.m_d_correction,
 			sph_cell_data,
 			b_cell_data,
 			numParticles,
@@ -1704,9 +1618,9 @@ void solve_sph_fluid(
 		getLastCudaError("Kernel execution failed: compute_position_correction ");
 		// correct this iteration
 		apply_correction << <num_blocks, num_threads >> > (
-			sph_particles->m_d_new_positions, 
-			sph_particles->m_d_predict_positions, 
-			sph_particles->m_d_correction,
+			sph_particles->m_device_data.m_d_new_positions,
+			sph_particles->m_device_data.m_d_predict_positions,
+			sph_particles->m_device_data.m_d_correction,
 			sph_cell_data,
 			numParticles
 		);
@@ -1716,10 +1630,10 @@ void solve_sph_fluid(
 	}
 	// finalize correction
 	finalize_correction << <num_blocks, num_threads >> > (
-		sph_particles->m_d_positions, 
-		sph_particles->m_d_new_positions, 
-		sph_particles->m_d_predict_positions, 
-		sph_particles->m_d_velocity,
+		sph_particles->m_device_data.m_d_positions,
+		sph_particles->m_device_data.m_d_new_positions,
+		sph_particles->m_device_data.m_d_predict_positions,
+		sph_particles->m_device_data.m_d_velocity,
 		numParticles, 
 		dt
 	);
@@ -2162,7 +2076,7 @@ void solve_pbd_dem(
 		{
 			calculate_hash(
 				cell_data,
-				dem_particles->m_d_predict_positions,
+				dem_particles->m_device_data.m_d_predict_positions,
 				numParticles
 			);
 			sort_particles(
@@ -2172,24 +2086,24 @@ void solve_pbd_dem(
 			reorder_data(
 				cell_data,
 				//particles->m_d_positions,
-				dem_particles->m_d_predict_positions,
+				dem_particles->m_device_data.m_d_predict_positions,
 				numParticles,
 				NUM_CELLS
 			);
 		}
 		compute_distance_correction << <num_blocks, num_threads >> > (
-			dem_particles->m_d_correction,
-			dem_particles->m_d_massInv,
-			boundary_particles->m_d_massInv,
+			dem_particles->m_device_data.m_d_correction,
+			dem_particles->m_device_data.m_d_massInv,
+			boundary_particles->m_device_data.m_d_massInv,
 			cell_data,
 			b_cell_data,
 			numParticles
 			);
 		getLastCudaError("Kernel execution failed: compute_dem_correction ");
 		apply_correction << <num_blocks, num_threads >> > (
-			dem_particles->m_d_new_positions,
-			dem_particles->m_d_predict_positions,
-			dem_particles->m_d_correction,
+			dem_particles->m_device_data.m_d_new_positions,
+			dem_particles->m_device_data.m_d_predict_positions,
+			dem_particles->m_device_data.m_d_correction,
 			cell_data,
 			numParticles
 			);
@@ -2199,7 +2113,7 @@ void solve_pbd_dem(
 
 	calculate_hash(
 		cell_data,
-		dem_particles->m_d_predict_positions,
+		dem_particles->m_device_data.m_d_predict_positions,
 		numParticles
 	);
 	sort_particles(
@@ -2209,17 +2123,17 @@ void solve_pbd_dem(
 	reorder_data(
 		cell_data,
 		//particles->m_d_positions,
-		dem_particles->m_d_predict_positions,
+		dem_particles->m_device_data.m_d_predict_positions,
 		numParticles,
 		NUM_CELLS
 	);
 
 	compute_friction_correction << <num_blocks, num_threads >> > (
-		dem_particles->m_d_correction,
-		dem_particles->m_d_new_positions,
-		dem_particles->m_d_positions,
-		dem_particles->m_d_massInv,
-		boundary_particles->m_d_massInv,
+		dem_particles->m_device_data.m_d_correction,
+		dem_particles->m_device_data.m_d_new_positions,
+		dem_particles->m_device_data.m_d_positions,
+		dem_particles->m_device_data.m_d_massInv,
+		boundary_particles->m_device_data.m_d_massInv,
 		cell_data,
 		b_cell_data,
 		numParticles
@@ -2227,9 +2141,9 @@ void solve_pbd_dem(
 
 	getLastCudaError("Kernel execution failed: compute_friction_correction ");
 	apply_correction << <num_blocks, num_threads >> > (
-		dem_particles->m_d_new_positions,
-		dem_particles->m_d_predict_positions,
-		dem_particles->m_d_correction,
+		dem_particles->m_device_data.m_d_new_positions,
+		dem_particles->m_device_data.m_d_predict_positions,
+		dem_particles->m_device_data.m_d_correction,
 		cell_data,
 		numParticles
 		);
@@ -2238,10 +2152,10 @@ void solve_pbd_dem(
 
 	// finalize correction
 	finalize_correction << <num_blocks, num_threads >> > (
-		dem_particles->m_d_positions,
-		dem_particles->m_d_new_positions,
-		dem_particles->m_d_predict_positions,
-		dem_particles->m_d_velocity,
+		dem_particles->m_device_data.m_d_positions,
+		dem_particles->m_device_data.m_d_new_positions,
+		dem_particles->m_device_data.m_d_predict_positions,
+		dem_particles->m_device_data.m_d_velocity,
 		numParticles,
 		dt
 		);
@@ -2377,9 +2291,9 @@ void solve_sph_dem(
 	compute_grid_size(num_sph_particles, MAX_THREAD_NUM, num_blocks, num_threads);
 	
 	compute_sph_dem_distance_correction << <num_blocks, num_threads >> > (
-		sph_particles->m_d_correction,
-		sph_particles->m_d_massInv,
-		dem_particles->m_d_massInv,
+		sph_particles->m_device_data.m_d_correction,
+		sph_particles->m_device_data.m_d_massInv,
+		dem_particles->m_device_data.m_d_massInv,
 		sph_cell_data,
 		dem_cell_data,
 		num_sph_particles
@@ -2725,11 +2639,11 @@ inline void compute_snow_pbf_density(
 	// sph-sph density
 	// sph-b density
 	compute_snow_sph_density_d <<< num_blocks, num_threads >>>(
-		sph_particles->m_d_density,
-		sph_particles->m_d_mass,
-		sph_particles->m_d_C,
-		dem_particles->m_d_mass,
-		boundary_particles->m_d_volume,
+		sph_particles->m_device_data.m_d_density,
+		sph_particles->m_device_data.m_d_mass,
+		sph_particles->m_device_data.m_d_C,
+		dem_particles->m_device_data.m_d_mass,
+		boundary_particles->m_device_data.m_d_volume,
 		sph_cell_data,
 		dem_cell_data,
 		b_cell_data,
@@ -2738,11 +2652,11 @@ inline void compute_snow_pbf_density(
 
 	// sph-dem density
 	compute_snow_dem_sph_density_d <<<dem_num_blocks, dem_num_threads>>>(
-		sph_particles->m_d_mass,
-		dem_particles->m_d_mass,
-		dem_particles->m_d_C,
-		dem_particles->m_d_density,
-		boundary_particles->m_d_volume,
+		sph_particles->m_device_data.m_d_mass,
+		dem_particles->m_device_data.m_d_mass,
+		dem_particles->m_device_data.m_d_C,
+		dem_particles->m_device_data.m_d_density,
+		boundary_particles->m_device_data.m_d_volume,
 		sph_cell_data,
 		dem_cell_data,
 		b_cell_data,
@@ -2751,12 +2665,12 @@ inline void compute_snow_pbf_density(
 
 	// boundary density
 	compute_snow_boundary_density_d << <b_num_blocks, b_num_threads >> > (
-		sph_particles->m_d_mass,
-		dem_particles->m_d_mass,
-		boundary_particles->m_d_mass,
-		boundary_particles->m_d_volume,
-		boundary_particles->m_d_C,
-		boundary_particles->m_d_density,
+		sph_particles->m_device_data.m_d_mass,
+		dem_particles->m_device_data.m_d_mass,
+		boundary_particles->m_device_data.m_d_mass,
+		boundary_particles->m_device_data.m_d_volume,
+		boundary_particles->m_device_data.m_d_C,
+		boundary_particles->m_device_data.m_d_density,
 		sph_cell_data,
 		dem_cell_data,
 		b_cell_data,
@@ -3091,10 +3005,10 @@ inline void compute_snow_pbf_lambdas(
 	// sph-sph lambdas
 	// sph-b lambdas
 	compute_snow_sph_lambdas_d << <num_blocks, num_threads >> > (
-		sph_particles->m_d_lambda,
-		sph_particles->m_d_C,
-		sph_particles->m_d_mass,
-		boundary_particles->m_d_volume,
+		sph_particles->m_device_data.m_d_lambda,
+		sph_particles->m_device_data.m_d_C,
+		sph_particles->m_device_data.m_d_mass,
+		boundary_particles->m_device_data.m_d_volume,
 		sph_cell_data,
 		dem_cell_data,
 		b_cell_data,
@@ -3103,11 +3017,11 @@ inline void compute_snow_pbf_lambdas(
 
 	// sph-dem lambdas (ignored if not using dem density)
 	compute_dem_sph_lambdas_d << <dem_num_blocks, dem_num_threads >> > (
-		dem_particles->m_d_lambda,
-		dem_particles->m_d_positions,
-		dem_particles->m_d_C,
-		dem_particles->m_d_mass,
-		boundary_particles->m_d_volume,
+		dem_particles->m_device_data.m_d_lambda,
+		dem_particles->m_device_data.m_d_positions,
+		dem_particles->m_device_data.m_d_C,
+		dem_particles->m_device_data.m_d_mass,
+		boundary_particles->m_device_data.m_d_volume,
 		sph_cell_data,
 		dem_cell_data,
 		b_cell_data,
@@ -3116,11 +3030,11 @@ inline void compute_snow_pbf_lambdas(
 
 	// boundary lambdas
 	compute_snow_boundary_lambdas_d << <b_num_blocks, b_num_threads >> > (
-		boundary_particles->m_d_lambda,
-		boundary_particles->m_d_volume,
-		boundary_particles->m_d_positions,
-		boundary_particles->m_d_C,
-		boundary_particles->m_d_mass,
+		boundary_particles->m_device_data.m_d_lambda,
+		boundary_particles->m_device_data.m_d_volume,
+		boundary_particles->m_device_data.m_d_positions,
+		boundary_particles->m_device_data.m_d_C,
+		boundary_particles->m_device_data.m_d_mass,
 		sph_cell_data,
 		dem_cell_data,
 		b_cell_data,
@@ -3484,10 +3398,10 @@ inline void compute_snow_pbf_correction(
 	// sph-sph correction
 	// sph-b correction
 	compute_snow_sph_position_correction << <num_blocks, num_threads >> > (
-		sph_particles->m_d_lambda,
-		dem_particles->m_d_lambda,
-		boundary_particles->m_d_lambda,
-		sph_particles->m_d_correction,
+		sph_particles->m_device_data.m_d_lambda,
+		dem_particles->m_device_data.m_d_lambda,
+		boundary_particles->m_device_data.m_d_lambda,
+		sph_particles->m_device_data.m_d_correction,
 		sph_cell_data,
 		dem_cell_data,
 		b_cell_data,
@@ -3534,9 +3448,9 @@ inline void compute_snow_distance_correction(
 	
 	// sph-dem distance correction (treat sph particles as dem particles)
 	compute_sph_dem_distance_correction <<<sph_num_blocks, sph_num_threads>>>(
-		sph_particles->m_d_correction,
-		sph_particles->m_d_massInv,
-		dem_particles->m_d_massInv,
+		sph_particles->m_device_data.m_d_correction,
+		sph_particles->m_device_data.m_d_massInv,
+		dem_particles->m_device_data.m_d_massInv,
 		sph_cell_data,
 		dem_cell_data,
 		sph_num_particles
@@ -3547,9 +3461,9 @@ inline void compute_snow_distance_correction(
 	{
 		//dem-sph distance correction (reversed parameters for the same function)
 		compute_sph_dem_distance_correction << <dem_num_blocks, dem_num_threads >> > (
-			dem_particles->m_d_correction,
-			dem_particles->m_d_massInv,
-			sph_particles->m_d_massInv,
+			dem_particles->m_device_data.m_d_correction,
+			dem_particles->m_device_data.m_d_massInv,
+			sph_particles->m_device_data.m_d_massInv,
 			dem_cell_data,
 			sph_cell_data,
 			dem_num_particles
@@ -3560,8 +3474,8 @@ inline void compute_snow_distance_correction(
 	if (sph_sph_correction)
 	{
 		compute_sph_sph_distance_correction << <sph_num_blocks, sph_num_threads >> > (
-			sph_particles->m_d_correction,
-			sph_particles->m_d_massInv,
+			sph_particles->m_device_data.m_d_correction,
+			sph_particles->m_device_data.m_d_massInv,
 			sph_cell_data,
 			sph_num_particles
 			);
@@ -3570,9 +3484,9 @@ inline void compute_snow_distance_correction(
 	// dem-dem distance correction
 	// dem-boundary distance correction
 	compute_distance_correction << <dem_num_blocks, dem_num_threads >> > (
-		dem_particles->m_d_correction,
-		dem_particles->m_d_massInv,
-		boundary_particles->m_d_massInv,
+		dem_particles->m_device_data.m_d_correction,
+		dem_particles->m_device_data.m_d_massInv,
+		boundary_particles->m_device_data.m_d_massInv,
 		dem_cell_data,
 		b_cell_data,
 		dem_num_particles
@@ -3758,12 +3672,12 @@ void apply_XSPH_viscosity(
 	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, sph_num_blocks, sph_num_threads);
 
 	xsph_viscosity <<<sph_num_blocks, sph_num_threads>>> (
-		sph_particles->m_d_velocity,
-		sph_particles->m_d_mass,
-		sph_particles->m_d_density,
-		dem_particles->m_d_velocity,
-		dem_particles->m_d_mass,
-		dem_particles->m_d_density,
+		sph_particles->m_device_data.m_d_velocity,
+		sph_particles->m_device_data.m_d_mass,
+		sph_particles->m_device_data.m_d_density,
+		dem_particles->m_device_data.m_d_velocity,
+		dem_particles->m_device_data.m_d_mass,
+		dem_particles->m_device_data.m_d_density,
 		sph_cell_data,
 		dem_cell_data,
 		sph_num_particles
@@ -3824,6 +3738,15 @@ void counting_neighbors_d(
 	neighbor_count0[original_index] = count;
 }
 
+void transfer_heat()
+{
+}
+
+void state_change()
+{
+}
+
+
 void snow_simulation(
 	ParticleSet* sph_particles,
 	ParticleSet* dem_particles, 
@@ -3866,13 +3789,13 @@ void snow_simulation(
 //		if (i != 0)
 //		{
 			sort_and_reorder(
-				dem_particles->m_d_predict_positions,
+				dem_particles->m_device_data.m_d_predict_positions,
 				dem_cell_data,
 				dem_num_particles
 			);
 
 			sort_and_reorder(
-				sph_particles->m_d_predict_positions,
+				sph_particles->m_device_data.m_d_predict_positions,
 				sph_cell_data,
 				sph_num_particles
 			);
@@ -3930,18 +3853,18 @@ void snow_simulation(
 			);
 
 		apply_correction << <sph_num_blocks, sph_num_threads >> > (
-			sph_particles->m_d_new_positions,
-			sph_particles->m_d_predict_positions,
-			sph_particles->m_d_correction,
+			sph_particles->m_device_data.m_d_new_positions,
+			sph_particles->m_device_data.m_d_predict_positions,
+			sph_particles->m_device_data.m_d_correction,
 			sph_cell_data,
 			sph_num_particles
 		);
 		getLastCudaError("Kernel execution failed: apply_correction ");
 
 		apply_correction << <dem_num_blocks, dem_num_threads >> > (
-			dem_particles->m_d_new_positions,
-			dem_particles->m_d_predict_positions,
-			dem_particles->m_d_correction,
+			dem_particles->m_device_data.m_d_new_positions,
+			dem_particles->m_device_data.m_d_predict_positions,
+			dem_particles->m_device_data.m_d_correction,
 			dem_cell_data,
 			dem_num_particles
 			);
@@ -3952,23 +3875,23 @@ void snow_simulation(
 	if (dem_friction)
 	{
 		sort_and_reorder(
-			dem_particles->m_d_predict_positions,
+			dem_particles->m_device_data.m_d_predict_positions,
 			dem_cell_data,
 			dem_num_particles
 		);
 
 		sort_and_reorder(
-			sph_particles->m_d_predict_positions,
+			sph_particles->m_device_data.m_d_predict_positions,
 			sph_cell_data,
 			sph_num_particles
 		);
 
 		compute_friction_correction << <dem_num_blocks, dem_num_threads >> > (
-			dem_particles->m_d_correction,
-			dem_particles->m_d_new_positions,
-			dem_particles->m_d_positions,
-			dem_particles->m_d_massInv,
-			boundary_particles->m_d_massInv,
+			dem_particles->m_device_data.m_d_correction,
+			dem_particles->m_device_data.m_d_new_positions,
+			dem_particles->m_device_data.m_d_positions,
+			dem_particles->m_device_data.m_d_massInv,
+			boundary_particles->m_device_data.m_d_massInv,
 			dem_cell_data,
 			b_cell_data,
 			dem_num_particles
@@ -3976,9 +3899,9 @@ void snow_simulation(
 		getLastCudaError("Kernel execution failed: compute_friction_correction ");
 
 		apply_correction << <dem_num_blocks, dem_num_threads >> > (
-			dem_particles->m_d_new_positions,
-			dem_particles->m_d_predict_positions,
-			dem_particles->m_d_correction,
+			dem_particles->m_device_data.m_d_new_positions,
+			dem_particles->m_device_data.m_d_predict_positions,
+			dem_particles->m_device_data.m_d_correction,
 			dem_cell_data,
 			dem_num_particles
 			);
@@ -3988,20 +3911,20 @@ void snow_simulation(
 	*/
 	// finialize corrections and compute velocity for next integration 
 	finalize_correction << <sph_num_blocks, sph_num_threads >> > (
-		sph_particles->m_d_positions,
-		sph_particles->m_d_new_positions,
-		sph_particles->m_d_predict_positions,
-		sph_particles->m_d_velocity,
+		sph_particles->m_device_data.m_d_positions,
+		sph_particles->m_device_data.m_d_new_positions,
+		sph_particles->m_device_data.m_d_predict_positions,
+		sph_particles->m_device_data.m_d_velocity,
 		sph_num_particles,
 		dt
 	);
 	getLastCudaError("Kernel execution failed: finalize_correction ");
 
 	finalize_correction << <dem_num_blocks, dem_num_threads >> > (
-		dem_particles->m_d_positions,
-		dem_particles->m_d_new_positions,
-		dem_particles->m_d_predict_positions,
-		dem_particles->m_d_velocity,
+		dem_particles->m_device_data.m_d_positions,
+		dem_particles->m_device_data.m_d_new_positions,
+		dem_particles->m_device_data.m_d_predict_positions,
+		dem_particles->m_device_data.m_d_velocity,
 		dem_num_particles,
 		dt
 		);

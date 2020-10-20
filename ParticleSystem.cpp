@@ -5,7 +5,7 @@
 #include <iostream>
 
 ParticleSystem::ParticleSystem() :
-	m_particles(nullptr),
+	m_sph_particles(nullptr),
 	m_dem_particles(nullptr),
 	m_boundary_particles(nullptr),
 	//m_particles(nullptr),
@@ -59,27 +59,11 @@ void ParticleSystem::UpdateCUDA()
 
 void ParticleSystem::Release()
 {
-	if (m_particles != nullptr)
+	if (m_sph_particles != nullptr)
 	{
-		// Release fluid particle cuda memory
-		//cudaFree(m_particles->m_d_prev_positions);
-		//cudaFree(m_particles->m_d_positions);
-		cudaFree(m_particles->m_d_predict_positions);
-		cudaFree(m_particles->m_d_new_positions);
-		cudaFree(m_particles->m_d_prev_velocity);
-		cudaFree(m_particles->m_d_velocity);
-		cudaFree(m_particles->m_d_new_velocity);
-		cudaFree(m_particles->m_d_correction);
-
-		cudaFree(m_particles->m_d_force);
-		cudaFree(m_particles->m_d_mass);
-		cudaFree(m_particles->m_d_massInv);
-		cudaFree(m_particles->m_d_density);
-		cudaFree(m_particles->m_d_C);
-		cudaFree(m_particles->m_d_lambda);
-
+		m_sph_particles->ReleaseDeviceData();
 		cudaGraphicsUnregisterResource(m_sph_cuda_vbo_resource);
-		delete m_particles;
+		delete m_sph_particles;
 	}
 
 	if (m_dem_particles != nullptr)
@@ -88,20 +72,7 @@ void ParticleSystem::Release()
 		// Release fluid particle cuda memory
 		//cudaFree(m_particles->m_d_prev_positions);
 		//cudaFree(m_particles->m_d_positions);
-		cudaFree(m_dem_particles->m_d_predict_positions);
-		cudaFree(m_dem_particles->m_d_new_positions);
-		cudaFree(m_dem_particles->m_d_prev_velocity);
-		cudaFree(m_dem_particles->m_d_velocity);
-		cudaFree(m_dem_particles->m_d_new_velocity);
-		cudaFree(m_dem_particles->m_d_correction);
-
-		cudaFree(m_dem_particles->m_d_force);
-		cudaFree(m_dem_particles->m_d_mass);
-		cudaFree(m_dem_particles->m_d_massInv);
-		cudaFree(m_dem_particles->m_d_density);
-		cudaFree(m_dem_particles->m_d_C);
-		cudaFree(m_dem_particles->m_d_lambda);
-
+		m_dem_particles->ReleaseDeviceData();
 		cudaGraphicsUnregisterResource(m_dem_cuda_vbo_resource);
 		//cudaGraphicsUnregisterResource(m_dem_cuda_vbo_resource[1]);
 		delete m_dem_particles;
@@ -110,11 +81,7 @@ void ParticleSystem::Release()
 	if (m_boundary_particles != nullptr)
 	{
 		// Release boundary particle cuda memory
-		cudaFree(m_boundary_particles->m_d_mass);
-		cudaFree(m_boundary_particles->m_d_massInv);
-		cudaFree(m_boundary_particles->m_d_density);
-		cudaFree(m_boundary_particles->m_d_C);
-		cudaFree(m_boundary_particles->m_d_lambda);
+		m_boundary_particles->ReleaseDeviceData();
 		cudaGraphicsUnregisterResource(m_boundary_cuda_vbo_resource);
 		delete m_boundary_particles;
 	}
@@ -123,8 +90,8 @@ void ParticleSystem::Release()
 
 ParticleSet* ParticleSystem::AllocateSPHParticles(size_t n, float particle_mass)
 {
-	m_particles = new ParticleSet(n, particle_mass);
-	return m_particles;
+	m_sph_particles = new ParticleSet(n, particle_mass);
+	return m_sph_particles;
 }
 
 ParticleSet* ParticleSystem::AllocateDEMParticles(size_t n, float particle_mass)
@@ -148,174 +115,147 @@ void ParticleSystem::SetupCUDAMemory()
 {
 	// Fluid paritcles
 	{
-		size_t n = m_particles->m_size;
+		size_t n = m_sph_particles->m_size;
 
 		//glm::vec3* prev_positions = m_particles->m_prev_positions.data();
-		glm::vec3* positions = m_particles->m_positions.data();
-		glm::vec3* predict_positions = m_particles->m_predict_positions.data();
-		glm::vec3* new_positions = m_particles->m_new_positions.data();
+		glm::vec3* positions = m_sph_particles->m_positions.data();
+		glm::vec3* predict_positions = m_sph_particles->m_predict_positions.data();
+		glm::vec3* new_positions = m_sph_particles->m_new_positions.data();
 
-		glm::vec3* velocity = m_particles->m_velocity.data();
-		glm::vec3* force = m_particles->m_force.data();
+		glm::vec3* velocity = m_sph_particles->m_velocity.data();
+		glm::vec3* force = m_sph_particles->m_force.data();
 
-		float* mass = m_particles->m_mass.data();
-		float* massInv = m_particles->m_massInv.data();
-		float* density = m_particles->m_density.data();
-		float* C = m_particles->m_C.data();
-		float* lambda = m_particles->m_lambda.data();
-
-		m_particles->m_wetness.resize(n, 1.f);
-		m_particles->m_num_neighbors.resize(n, 0);
-		
+		float* mass = m_sph_particles->m_mass.data();
+		float* massInv = m_sph_particles->m_massInv.data();
+		float* density = m_sph_particles->m_density.data();
+		float* C = m_sph_particles->m_C.data();
+		float* lambda = m_sph_particles->m_lambda.data();
+				
 		// m_positions is the map/unmap target. we don't setup right here
 		// Allocate memory spaces
 		cudaMalloc(
-		(void**)&(m_particles->m_d_predict_positions),
+		(void**)&(m_sph_particles->m_device_data.m_d_predict_positions),
 			n * sizeof(float3)
 			);
 		cudaMalloc(
-		(void**)&(m_particles->m_d_new_positions),
+		(void**)&(m_sph_particles->m_device_data.m_d_new_positions),
 			n * sizeof(float3)
 			);
 		cudaMalloc(
-		(void**)&(m_particles->m_d_prev_velocity),
+		(void**)&(m_sph_particles->m_device_data.m_d_prev_velocity),
 			n * sizeof(float3)
 			);
 		cudaMalloc(
-		(void**)&(m_particles->m_d_velocity),
+		(void**)&(m_sph_particles->m_device_data.m_d_velocity),
 			n * sizeof(float3)
 			);
 		cudaMalloc(
-		(void**)&(m_particles->m_d_new_velocity),
+		(void**)&(m_sph_particles->m_device_data.m_d_new_velocity),
 			n * sizeof(float3)
 			);
 		cudaMalloc(
-		(void**)&(m_particles->m_d_force),
+		(void**)&(m_sph_particles->m_device_data.m_d_force),
 			n * sizeof(float3)
 			);
 		cudaMalloc(
-		(void**)&(m_particles->m_d_mass),
+		(void**)&(m_sph_particles->m_device_data.m_d_mass),
 			n * sizeof(float)
 			);
 		cudaMalloc(
-		(void**)&(m_particles->m_d_massInv),
+		(void**)&(m_sph_particles->m_device_data.m_d_massInv),
 			n * sizeof(float)
 			);
 		cudaMalloc(
-		(void**)&(m_particles->m_d_density),
+		(void**)&(m_sph_particles->m_device_data.m_d_density),
 			n * sizeof(float)
 			);
 		cudaMalloc(
-		(void**)&(m_particles->m_d_C),
+		(void**)&(m_sph_particles->m_device_data.m_d_C),
 			n * sizeof(float)
 			);
 		cudaMalloc(
-		(void**)&(m_particles->m_d_lambda),
+		(void**)&(m_sph_particles->m_device_data.m_d_lambda),
 			n * sizeof(float)
 			);
 
 		cudaMalloc(
-			(void**)&(m_particles->m_d_correction),
+			(void**)&(m_sph_particles->m_device_data.m_d_correction),
 			n * sizeof(float3)
-		);
-
-		cudaMalloc(
-		(void**)&(m_particles->m_d_wetness),
-			n * sizeof(float)
-		);
-		
-		cudaMalloc(
-		(void**)&(m_particles->m_d_num_neighbors),
-			n * sizeof(float)
 		);
 
 		// Set value
 		cudaMemcpy(
-		(void*)m_particles->m_d_predict_positions,
+		(void*)m_sph_particles->m_device_data.m_d_predict_positions,
 			(void*)predict_positions,
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_particles->m_d_new_positions,
+		(void*)m_sph_particles->m_device_data.m_d_new_positions,
 			(void*)new_positions,
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_particles->m_d_velocity,
+		(void*)m_sph_particles->m_device_data.m_d_velocity,
 			(void*)velocity,
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_particles->m_d_force,
+		(void*)m_sph_particles->m_device_data.m_d_force,
 			(void*)force,
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_particles->m_d_mass,
+		(void*)m_sph_particles->m_device_data.m_d_mass,
 			(void*)mass,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_particles->m_d_massInv,
+		(void*)m_sph_particles->m_device_data.m_d_massInv,
 			(void*)massInv,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_particles->m_d_density,
+		(void*)m_sph_particles->m_device_data.m_d_density,
 			(void*)density,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_particles->m_d_C,
+		(void*)m_sph_particles->m_device_data.m_d_C,
 			(void*)C,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_particles->m_d_lambda,
+		(void*)m_sph_particles->m_device_data.m_d_lambda,
 			(void*)lambda,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 			);
 
 		cudaMemcpy(
-		(void*)m_particles->m_d_prev_velocity,
+		(void*)m_sph_particles->m_device_data.m_d_prev_velocity,
 			(void*)velocity,
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_particles->m_d_new_velocity,
+		(void*)m_sph_particles->m_device_data.m_d_new_velocity,
 			(void*)velocity,
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
 
 		cudaMemcpy(
-			(void*)m_particles->m_d_correction,
+			(void*)m_sph_particles->m_device_data.m_d_correction,
 			(void*)velocity,
 			n * sizeof(float3),
-			cudaMemcpyHostToDevice
-		);
-
-		cudaMemcpy(
-		(void*)m_particles->m_d_wetness,
-			(void*)m_particles->m_wetness.data(),
-			n * sizeof(float),
-			cudaMemcpyHostToDevice
-		);
-
-		cudaMemcpy(
-		(void*)m_particles->m_d_wetness,
-			(void*)m_particles->m_num_neighbors.data(),
-			n * sizeof(float),
 			cudaMemcpyHostToDevice
 		);
 
@@ -339,160 +279,134 @@ void ParticleSystem::SetupCUDAMemory()
 		float* C = m_dem_particles->m_C.data();
 		float* lambda = m_dem_particles->m_lambda.data();
 
-		m_dem_particles->m_wetness.resize(n, 0.f);
-		m_dem_particles->m_num_neighbors.resize(n, 0);
-
 		// m_positions is the map/unmap target. we don't setup right here
 		// Allocate memory spaces
 		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_predict_positions),
+		(void**)&(m_dem_particles->m_device_data.m_d_predict_positions),
 			n * sizeof(float3)
 			);
 		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_new_positions),
+		(void**)&(m_dem_particles->m_device_data.m_d_new_positions),
 			n * sizeof(float3)
 			);
 		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_prev_velocity),
+		(void**)&(m_dem_particles->m_device_data.m_d_prev_velocity),
 			n * sizeof(float3)
 			);
 		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_velocity),
+		(void**)&(m_dem_particles->m_device_data.m_d_velocity),
 			n * sizeof(float3)
 			);
 		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_new_velocity),
+		(void**)&(m_dem_particles->m_device_data.m_d_new_velocity),
 			n * sizeof(float3)
 			);
 		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_force),
+		(void**)&(m_dem_particles->m_device_data.m_d_force),
 			n * sizeof(float3)
 			);
 		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_mass),
+		(void**)&(m_dem_particles->m_device_data.m_d_mass),
 			n * sizeof(float)
 			);
 		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_massInv),
+		(void**)&(m_dem_particles->m_device_data.m_d_massInv),
 			n * sizeof(float)
 			);
 		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_density),
+		(void**)&(m_dem_particles->m_device_data.m_d_density),
 			n * sizeof(float)
 			);
 		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_C),
+		(void**)&(m_dem_particles->m_device_data.m_d_C),
 			n * sizeof(float)
 			);
 		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_lambda),
-			n * sizeof(float)
-			);
-
-		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_correction),
-			n * sizeof(float3)
-			);
-
-		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_wetness),
+		(void**)&(m_dem_particles->m_device_data.m_d_lambda),
 			n * sizeof(float)
 			);
 
 		cudaMalloc(
-		(void**)&(m_dem_particles->m_d_num_neighbors),
-			n * sizeof(float)
+		(void**)&(m_dem_particles->m_device_data.m_d_correction),
+			n * sizeof(float3)
 			);
 
 		// Set value
 		cudaMemcpy(
-		(void*)m_dem_particles->m_d_predict_positions,
+		(void*)m_dem_particles->m_device_data.m_d_predict_positions,
 			(void*)predict_positions,
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_dem_particles->m_d_new_positions,
+		(void*)m_dem_particles->m_device_data.m_d_new_positions,
 			(void*)new_positions,
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_dem_particles->m_d_velocity,
+		(void*)m_dem_particles->m_device_data.m_d_velocity,
 			(void*)velocity,
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_dem_particles->m_d_force,
+		(void*)m_dem_particles->m_device_data.m_d_force,
 			(void*)force,
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_dem_particles->m_d_mass,
+		(void*)m_dem_particles->m_device_data.m_d_mass,
 			(void*)mass,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_dem_particles->m_d_massInv,
+		(void*)m_dem_particles->m_device_data.m_d_massInv,
 			(void*)massInv,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_dem_particles->m_d_density,
+		(void*)m_dem_particles->m_device_data.m_d_density,
 			(void*)density,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_dem_particles->m_d_C,
+		(void*)m_dem_particles->m_device_data.m_d_C,
 			(void*)C,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_dem_particles->m_d_lambda,
+		(void*)m_dem_particles->m_device_data.m_d_lambda,
 			(void*)lambda,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 			);
 
 		cudaMemcpy(
-		(void*)m_dem_particles->m_d_prev_velocity,
+		(void*)m_dem_particles->m_device_data.m_d_prev_velocity,
 			(void*)velocity,
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
 		cudaMemcpy(
-		(void*)m_dem_particles->m_d_new_velocity,
-			(void*)velocity,
-			n * sizeof(float3),
-			cudaMemcpyHostToDevice
-			);
-
-		cudaMemcpy(
-		(void*)m_dem_particles->m_d_correction,
+		(void*)m_dem_particles->m_device_data.m_d_new_velocity,
 			(void*)velocity,
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
 
 		cudaMemcpy(
-		(void*)m_dem_particles->m_d_wetness,
-			(void*)m_dem_particles->m_wetness.data(),
-			n * sizeof(float),
+		(void*)m_dem_particles->m_device_data.m_d_correction,
+			(void*)velocity,
+			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
 
-		cudaMemcpy(
-		(void*)m_dem_particles->m_d_wetness,
-			(void*)m_dem_particles->m_num_neighbors.data(),
-			n * sizeof(float),
-			cudaMemcpyHostToDevice
-			);
 	}// end of DEM particle setting
 
 	// Boundary particless
@@ -515,63 +429,63 @@ void ParticleSystem::SetupCUDAMemory()
 		// Positions will be updated with map/unmap 
 
 		cudaMalloc(
-			(void**)&(m_boundary_particles->m_d_mass),
+			(void**)&(m_boundary_particles->m_device_data.m_d_mass),
 			n * sizeof(float)
 		);
 		cudaMalloc(
-			(void**)&(m_boundary_particles->m_d_massInv),
+			(void**)&(m_boundary_particles->m_device_data.m_d_massInv),
 			n * sizeof(float)
 		);
 		cudaMalloc(
-			(void**)&(m_boundary_particles->m_d_density),
+			(void**)&(m_boundary_particles->m_device_data.m_d_density),
 			n * sizeof(float)
 		);
 		cudaMalloc(
-			(void**)&(m_boundary_particles->m_d_C),
+			(void**)&(m_boundary_particles->m_device_data.m_d_C),
 			n * sizeof(float)
 		);
 		cudaMalloc(
-			(void**)&(m_boundary_particles->m_d_lambda),
+			(void**)&(m_boundary_particles->m_device_data.m_d_lambda),
 			n * sizeof(float)
 		);
 		cudaMalloc(
-			(void**)&(m_boundary_particles->m_d_volume),
+			(void**)&(m_boundary_particles->m_device_data.m_d_volume),
 			n * sizeof(float)
 		);
 
 		// Copy data
 		cudaMemcpy(
-			(void*)m_boundary_particles->m_d_mass,
+			(void*)m_boundary_particles->m_device_data.m_d_mass,
 			(void*)mass,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 		);
 		cudaMemcpy(
-			(void*)m_boundary_particles->m_d_massInv,
+			(void*)m_boundary_particles->m_device_data.m_d_massInv,
 			(void*)massInv,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 		);
 		cudaMemcpy(
-			(void*)m_boundary_particles->m_d_density,
+			(void*)m_boundary_particles->m_device_data.m_d_density,
 			(void*)density,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 		);
 		cudaMemcpy(
-			(void*)m_boundary_particles->m_d_C,
+			(void*)m_boundary_particles->m_device_data.m_d_C,
 			(void*)C,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 		);
 		cudaMemcpy(
-			(void*)m_boundary_particles->m_d_lambda,
+			(void*)m_boundary_particles->m_device_data.m_d_lambda,
 			(void*)lambda,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 		);
 		cudaMemcpy(
-			(void*)m_boundary_particles->m_d_volume,
+			(void*)m_boundary_particles->m_device_data.m_d_volume,
 			(void*)volume,
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
@@ -582,7 +496,7 @@ void ParticleSystem::SetupCUDAMemory()
 
 void ParticleSystem::RegisterCUDAVBO()
 {
-	if(m_particles)
+	if(m_sph_particles)
 		cudaGraphicsGLRegisterBuffer(&m_sph_cuda_vbo_resource, m_sph_vbo, cudaGraphicsMapFlagsNone);
 	if (m_dem_particles)
 	{
@@ -613,15 +527,15 @@ void ParticleSystem::GenerateGLBuffers()
 
 void ParticleSystem::UpdateGLBUfferData()
 {
-	if (m_particles->m_size == 0)
+	if (m_sph_particles->m_size == 0)
 		return;
 
 	// Fluid particle GL buffer data
 	glBindVertexArray(m_sph_vao);
 
 	glBindBuffer(GL_ARRAY_BUFFER, m_sph_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * m_particles->m_positions.size(),
-		m_particles->m_positions.data(), GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * m_sph_particles->m_positions.size(),
+		m_sph_particles->m_positions.data(), GL_DYNAMIC_DRAW);
 
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);

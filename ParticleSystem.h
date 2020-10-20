@@ -28,7 +28,7 @@ public:
 	//void setParticles(std::vector<std::shared_ptr<Particle>> particles);
 	void setParticleRadius(float particle_radius);
 
-	inline ParticleSet* getSPHParticles() { return m_particles; };
+	inline ParticleSet* getSPHParticles() { return m_sph_particles; };
 	inline ParticleSet* getDEMParticles() { return m_dem_particles; };
 	inline ParticleSet* getBoundaryParticles() { return m_boundary_particles; };
 //	inline std::vector<std::shared_ptr<Particle>>& getParticles() { return m_particles; };
@@ -62,7 +62,7 @@ private:
 
 	void UpdateGLBUfferData();
 
-	ParticleSet* m_particles;
+	ParticleSet* m_sph_particles;
 	ParticleSet* m_dem_particles;
 	ParticleSet* m_boundary_particles;
 

@@ -185,8 +185,6 @@ ParticleSet::ParticleSet(size_t n, float particle_mass)
 	m_density.resize(n, 0.f);
 	m_C.resize(n, 0.f);
 	m_lambda.resize(n, 0.f);
-
-	m_wetness.resize(n, 0.f);
 }
 
 ParticleSet::~ParticleSet()
@@ -367,4 +365,22 @@ void ParticleSet::ResetPositions(std::vector<glm::vec3> positions, float particl
 void ParticleSet::EraseTail(size_t start)
 {
 
+}
+
+void ParticleSet::ReleaseDeviceData()
+{
+	// Release fluid particle cuda memory
+	cudaFree(m_device_data.m_d_predict_positions);
+	cudaFree(m_device_data.m_d_new_positions);
+	cudaFree(m_device_data.m_d_prev_velocity);
+	cudaFree(m_device_data.m_d_velocity);
+	cudaFree(m_device_data.m_d_new_velocity);
+	cudaFree(m_device_data.m_d_correction);
+
+	cudaFree(m_device_data.m_d_force);
+	cudaFree(m_device_data.m_d_mass);
+	cudaFree(m_device_data.m_d_massInv);
+	cudaFree(m_device_data.m_d_density);
+	cudaFree(m_device_data.m_d_C);
+	cudaFree(m_device_data.m_d_lambda);
 }
