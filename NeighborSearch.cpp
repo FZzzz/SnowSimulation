@@ -88,6 +88,7 @@ void NeighborSearch::InitializeCUDA()
 void NeighborSearch::Release()
 {
     const ParticleSet* const sph_particles = m_particle_system->getSPHParticles();
+    const ParticleSet* const dem_particles = m_particle_system->getDEMParticles();
     const ParticleSet* const boundary_particles = m_particle_system->getBoundaryParticles();
 
     if (sph_particles != nullptr)
@@ -98,6 +99,16 @@ void NeighborSearch::Release()
         cudaFree(m_d_sph_cell_data.cell_end);
         cudaFree(m_d_sph_cell_data.sorted_pos);
     }
+
+    if (dem_particles != nullptr)
+    {
+        cudaFree(m_d_dem_cell_data.grid_hash);
+        cudaFree(m_d_dem_cell_data.grid_index);
+        cudaFree(m_d_dem_cell_data.cell_start);
+        cudaFree(m_d_dem_cell_data.cell_end);
+        cudaFree(m_d_dem_cell_data.sorted_pos);
+    }
+
     if (boundary_particles != nullptr)
     {
         cudaFree(m_d_boundary_cell_data.grid_hash);

@@ -26,6 +26,7 @@ public:
 	void SwitchSphVisibility();
 	void SwitchDEMVisibility();
 	void SwitchBoundaryVisibility();
+	void SwitchTemperatureShader();
 
 	// setters
 	void setMainCamera(std::shared_ptr<Camera> camera);
@@ -60,6 +61,8 @@ private:
 	bool m_sph_visibility;
 	bool m_dem_visibility;
 	bool m_boundary_visibility;
+
+	bool m_use_temperature_shader;
 
 };
 

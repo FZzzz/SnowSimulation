@@ -9,10 +9,7 @@ ParticleSystem::ParticleSystem() :
 	m_dem_particles(nullptr),
 	m_boundary_particles(nullptr),
 	//m_particles(nullptr),
-	m_particle_radius(5.f),
-	m_sph_vao(-1),
-	m_sph_vbo(-1),
-	m_sph_ebo(-1)
+	m_particle_radius(5.f)
 {
 }
 
@@ -33,7 +30,7 @@ void ParticleSystem::InitializeCUDA()
 	GenerateGLBuffers();
 	SetupCUDAMemory();
 	UpdateGLBUfferData();
-	RegisterCUDAVBO();
+	//RegisterCUDAVBO();
 }
 
 void ParticleSystem::Update()
@@ -62,25 +59,21 @@ void ParticleSystem::Release()
 	if (m_sph_particles != nullptr)
 	{
 		m_sph_particles->ReleaseDeviceData();
-		cudaGraphicsUnregisterResource(m_sph_cuda_vbo_resource);
+		cudaGraphicsUnregisterResource(m_sph_cuda_vbo_resource[0]);
+		cudaGraphicsUnregisterResource(m_sph_cuda_vbo_resource[1]);
 		delete m_sph_particles;
 	}
 
 	if (m_dem_particles != nullptr)
 	{
-
-		// Release fluid particle cuda memory
-		//cudaFree(m_particles->m_d_prev_positions);
-		//cudaFree(m_particles->m_d_positions);
 		m_dem_particles->ReleaseDeviceData();
-		cudaGraphicsUnregisterResource(m_dem_cuda_vbo_resource);
-		//cudaGraphicsUnregisterResource(m_dem_cuda_vbo_resource[1]);
+		cudaGraphicsUnregisterResource(m_dem_cuda_vbo_resource[0]);
+		cudaGraphicsUnregisterResource(m_dem_cuda_vbo_resource[1]);
 		delete m_dem_particles;
 	}
 
 	if (m_boundary_particles != nullptr)
 	{
-		// Release boundary particle cuda memory
 		m_boundary_particles->ReleaseDeviceData();
 		cudaGraphicsUnregisterResource(m_boundary_cuda_vbo_resource);
 		delete m_boundary_particles;
@@ -117,6 +110,9 @@ void ParticleSystem::SetupCUDAMemory()
 	{
 		size_t n = m_sph_particles->m_size;
 
+		std::vector<glm::vec3> vec3_zeros;
+		vec3_zeros.resize(n, glm::vec3(0, 0, 0));
+		
 		//glm::vec3* prev_positions = m_particles->m_prev_positions.data();
 		glm::vec3* positions = m_sph_particles->m_positions.data();
 		glm::vec3* predict_positions = m_sph_particles->m_predict_positions.data();
@@ -157,6 +153,12 @@ void ParticleSystem::SetupCUDAMemory()
 		(void**)&(m_sph_particles->m_device_data.m_d_force),
 			n * sizeof(float3)
 			);
+
+		cudaMalloc(
+			(void**)&(m_sph_particles->m_device_data.m_d_correction),
+			n * sizeof(float3)
+		);
+
 		cudaMalloc(
 		(void**)&(m_sph_particles->m_device_data.m_d_mass),
 			n * sizeof(float)
@@ -179,8 +181,8 @@ void ParticleSystem::SetupCUDAMemory()
 			);
 
 		cudaMalloc(
-			(void**)&(m_sph_particles->m_device_data.m_d_correction),
-			n * sizeof(float3)
+			(void**)&(m_sph_particles->m_device_data.m_d_new_T),
+			n * sizeof(float)
 		);
 
 		// Set value
@@ -208,6 +210,27 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
+
+		cudaMemcpy(
+			(void*)m_sph_particles->m_device_data.m_d_prev_velocity,
+			(void*)velocity,
+			n * sizeof(float3),
+			cudaMemcpyHostToDevice
+		);
+		cudaMemcpy(
+			(void*)m_sph_particles->m_device_data.m_d_new_velocity,
+			(void*)velocity,
+			n * sizeof(float3),
+			cudaMemcpyHostToDevice
+		);
+
+		cudaMemcpy(
+			(void*)m_sph_particles->m_device_data.m_d_correction,
+			(void*)vec3_zeros.data(),
+			n * sizeof(float3),
+			cudaMemcpyHostToDevice
+		);
+
 		cudaMemcpy(
 		(void*)m_sph_particles->m_device_data.m_d_mass,
 			(void*)mass,
@@ -238,24 +261,11 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 			);
-
+		
 		cudaMemcpy(
-		(void*)m_sph_particles->m_device_data.m_d_prev_velocity,
-			(void*)velocity,
-			n * sizeof(float3),
-			cudaMemcpyHostToDevice
-			);
-		cudaMemcpy(
-		(void*)m_sph_particles->m_device_data.m_d_new_velocity,
-			(void*)velocity,
-			n * sizeof(float3),
-			cudaMemcpyHostToDevice
-			);
-
-		cudaMemcpy(
-			(void*)m_sph_particles->m_device_data.m_d_correction,
-			(void*)velocity,
-			n * sizeof(float3),
+			(void*)m_sph_particles->m_device_data.m_d_new_T,
+			(void*)m_sph_particles->m_temperature.data(),
+			n * sizeof(float),
 			cudaMemcpyHostToDevice
 		);
 
@@ -306,6 +316,10 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float3)
 			);
 		cudaMalloc(
+			(void**)&(m_dem_particles->m_device_data.m_d_correction),
+			n * sizeof(float3)
+		);
+		cudaMalloc(
 		(void**)&(m_dem_particles->m_device_data.m_d_mass),
 			n * sizeof(float)
 			);
@@ -325,11 +339,10 @@ void ParticleSystem::SetupCUDAMemory()
 		(void**)&(m_dem_particles->m_device_data.m_d_lambda),
 			n * sizeof(float)
 			);
-
 		cudaMalloc(
-		(void**)&(m_dem_particles->m_device_data.m_d_correction),
-			n * sizeof(float3)
-			);
+			(void**)&(m_dem_particles->m_device_data.m_d_new_T),
+			n * sizeof(float)
+		);
 
 		// Set value
 		cudaMemcpy(
@@ -406,6 +419,13 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float3),
 			cudaMemcpyHostToDevice
 			);
+		
+		cudaMemcpy(
+			(void*)m_dem_particles->m_device_data.m_d_new_T,
+			(void*)m_dem_particles->m_temperature.data(),
+			n * sizeof(float),
+			cudaMemcpyHostToDevice
+		);
 
 	}// end of DEM particle setting
 
@@ -496,12 +516,15 @@ void ParticleSystem::SetupCUDAMemory()
 
 void ParticleSystem::RegisterCUDAVBO()
 {
-	if(m_sph_particles)
-		cudaGraphicsGLRegisterBuffer(&m_sph_cuda_vbo_resource, m_sph_vbo, cudaGraphicsMapFlagsNone);
+	if (m_sph_particles)
+	{
+		cudaGraphicsGLRegisterBuffer(&m_sph_cuda_vbo_resource[0], m_sph_vbo[0], cudaGraphicsMapFlagsNone);
+		cudaGraphicsGLRegisterBuffer(&m_sph_cuda_vbo_resource[1], m_sph_vbo[1], cudaGraphicsMapFlagsNone);
+	}
 	if (m_dem_particles)
 	{
-		cudaGraphicsGLRegisterBuffer(&m_dem_cuda_vbo_resource, m_dem_vbo, cudaGraphicsMapFlagsNone);
-		//cudaGraphicsGLRegisterBuffer(&m_dem_cuda_vbo_resource[1], m_dem_vbo[1], cudaGraphicsMapFlagsNone);
+		cudaGraphicsGLRegisterBuffer(&m_dem_cuda_vbo_resource[0], m_dem_vbo[0], cudaGraphicsMapFlagsNone);
+		cudaGraphicsGLRegisterBuffer(&m_dem_cuda_vbo_resource[1], m_dem_vbo[1], cudaGraphicsMapFlagsNone);
 	}
 	if(m_boundary_particles)
 		cudaGraphicsGLRegisterBuffer(&m_boundary_cuda_vbo_resource, m_boundary_vbo, cudaGraphicsMapFlagsNone);
@@ -511,11 +534,11 @@ void ParticleSystem::GenerateGLBuffers()
 {
 	// fluid particles
 	glGenVertexArrays(1, &m_sph_vao);
-	glGenBuffers(1, &m_sph_vbo);
+	glGenBuffers(2, m_sph_vbo);
 	glGenBuffers(1, &m_sph_ebo); // NOTICE: not using
 
 	glGenVertexArrays(1, &m_dem_vao);
-	glGenBuffers(1, &m_dem_vbo);
+	glGenBuffers(2, m_dem_vbo);
 	glGenBuffers(1, &m_dem_ebo); // NOTICE: not using
 
 	// boundary paritcles
@@ -533,12 +556,21 @@ void ParticleSystem::UpdateGLBUfferData()
 	// Fluid particle GL buffer data
 	glBindVertexArray(m_sph_vao);
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_sph_vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, m_sph_vbo[0]);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * m_sph_particles->m_positions.size(),
 		m_sph_particles->m_positions.data(), GL_DYNAMIC_DRAW);
 
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	// bind temperature buffer
+	glBindBuffer(GL_ARRAY_BUFFER, m_sph_vbo[1]);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * m_sph_particles->m_temperature.size(),
+		m_sph_particles->m_temperature.data(), GL_DYNAMIC_DRAW);
+
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
@@ -549,7 +581,7 @@ void ParticleSystem::UpdateGLBUfferData()
 
 		glBindVertexArray(m_dem_vao);
 
-		glBindBuffer(GL_ARRAY_BUFFER, m_dem_vbo);
+		glBindBuffer(GL_ARRAY_BUFFER, m_dem_vbo[0]);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * n,
 			m_dem_particles->m_positions.data(), GL_DYNAMIC_DRAW);
 
@@ -557,7 +589,16 @@ void ParticleSystem::UpdateGLBUfferData()
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0); // unbind vbo[0]
-			
+		
+		// bind temperature buffer
+		glBindBuffer(GL_ARRAY_BUFFER, m_dem_vbo[1]);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * n,
+			m_dem_particles->m_temperature.data(), GL_DYNAMIC_DRAW);
+
+		glEnableVertexAttribArray(1);
+		glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
+
+		glBindBuffer(GL_ARRAY_BUFFER, 0); // unbind vbo[0]
 		glBindVertexArray(0);
 	}
 

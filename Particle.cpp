@@ -185,6 +185,8 @@ ParticleSet::ParticleSet(size_t n, float particle_mass)
 	m_density.resize(n, 0.f);
 	m_C.resize(n, 0.f);
 	m_lambda.resize(n, 0.f);
+
+	m_temperature.resize(n, 0.f);
 }
 
 ParticleSet::~ParticleSet()
@@ -360,27 +362,26 @@ void ParticleSet::ResetPositions(std::vector<glm::vec3> positions, float particl
 	m_C.resize(m_size, 0.f);
 	m_lambda.resize(m_size, 0.f);
 	m_volume.resize(m_size, 0.f);
-}
-
-void ParticleSet::EraseTail(size_t start)
-{
-
+	m_temperature.resize(m_size, 0.f);
 }
 
 void ParticleSet::ReleaseDeviceData()
 {
 	// Release fluid particle cuda memory
-	cudaFree(m_device_data.m_d_predict_positions);
-	cudaFree(m_device_data.m_d_new_positions);
-	cudaFree(m_device_data.m_d_prev_velocity);
-	cudaFree(m_device_data.m_d_velocity);
-	cudaFree(m_device_data.m_d_new_velocity);
-	cudaFree(m_device_data.m_d_correction);
+	if (m_device_data.m_d_predict_positions != nullptr) cudaFree(m_device_data.m_d_predict_positions);
+	if (m_device_data.m_d_new_positions != nullptr) cudaFree(m_device_data.m_d_new_positions);
+	if (m_device_data.m_d_prev_positions != nullptr) cudaFree(m_device_data.m_d_prev_velocity);
+	if (m_device_data.m_d_velocity != nullptr) cudaFree(m_device_data.m_d_velocity);
+	if (m_device_data.m_d_new_velocity != nullptr) cudaFree(m_device_data.m_d_new_velocity);
+	if (m_device_data.m_d_correction != nullptr) cudaFree(m_device_data.m_d_correction);
 
-	cudaFree(m_device_data.m_d_force);
-	cudaFree(m_device_data.m_d_mass);
-	cudaFree(m_device_data.m_d_massInv);
-	cudaFree(m_device_data.m_d_density);
-	cudaFree(m_device_data.m_d_C);
-	cudaFree(m_device_data.m_d_lambda);
+	if (m_device_data.m_d_force!= nullptr) cudaFree(m_device_data.m_d_force);
+	if (m_device_data.m_d_mass != nullptr) cudaFree(m_device_data.m_d_mass);
+	if (m_device_data.m_d_massInv != nullptr) cudaFree(m_device_data.m_d_massInv);
+	if (m_device_data.m_d_density != nullptr) cudaFree(m_device_data.m_d_density);
+	if (m_device_data.m_d_C != nullptr) cudaFree(m_device_data.m_d_C);
+	if (m_device_data.m_d_lambda != nullptr) cudaFree(m_device_data.m_d_lambda);
+
+	if (m_device_data.m_d_T != nullptr) cudaFree(m_device_data.m_d_T);
+	if (m_device_data.m_d_new_T != nullptr) cudaFree(m_device_data.m_d_new_T);
 }

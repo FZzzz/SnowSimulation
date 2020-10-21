@@ -37,7 +37,8 @@ GLFWApp::GLFWApp() :
 	m_resource_manager(nullptr),
 	m_gui_manager(nullptr),
 	m_mainCamera(nullptr),
-	m_renderer(nullptr)
+	m_renderer(nullptr),
+	m_mouse_pressed(false)
 {
 }
 
@@ -127,8 +128,8 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	point_shader->SetupShader("resources/shader/point_sprite_vs.glsl", 
 		"resources/shader/point_sprite_fs.glsl");
 
-	std::shared_ptr<Shader> wet_point_shader = std::make_shared<Shader>("WetPointSprite");
-	wet_point_shader->SetupShader("resources/shader/wetness_point_sprite_vs.glsl",
+	std::shared_ptr<Shader> point_temp_shader = std::make_shared<Shader>("PointSpriteTemperature");
+	point_temp_shader->SetupShader("resources/shader/point_sprite_temperature_vs.glsl",
 		"resources/shader/point_sprite_fs.glsl");
 
 	auto mat_uniform = glGetUniformBlockIndex(shadow_mapping_shader->getProgram(), "Matrices");
@@ -160,7 +161,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 		m_renderer = std::make_shared<Renderer>();
 		m_renderer->Initialize(m_resource_manager, m_particle_system, m_mainCamera, width, height);
 	}
-	/*
+	
 	// Load Meshes
 	//std::shared_ptr<GameObject> obj = std::make_shared<GameObject>();	
 	{
@@ -174,7 +175,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 			SignalFail();
 		}
 	}
-	*/
+	
 		
 	// Terrain Initilization
 	{
@@ -222,7 +223,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 
 	// Simulation control settings
 	{
-		uint32_t iterations = 2;
+		uint32_t iterations = 3;
 		int clip_length = 200000;
 		m_simulator->SetSolverIteration(iterations);
 		m_simulator->setClipLength(clip_length);
@@ -299,6 +300,12 @@ void Key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		{
 			auto simulator = instance->getSimulator();
 			simulator->Pause();
+			break;
+		}
+		case GLFW_KEY_T:
+		{
+			auto renderer = instance->getRenderer();
+			renderer->SwitchTemperatureShader();
 			break;
 		}
 		case GLFW_KEY_1:

@@ -18,17 +18,16 @@ struct SimParams
 	float  rest_density;
 	float  scorr_coeff;
 
-	// dem coefficients
+	// dem coeffcients
 	float  boundary_damping;
 	float  static_friction;
 	float  kinematic_friction;
-
-	// wetness coefficients
-	float wetness_threshold;
-	float wetness_max;
-	float k_p; // propagation coefficient
-	float k_bridge;
-
+	
+	// heat conduction coeffcients
+	float  k_water;
+	float  k_snow;
+	float  C_water;
+	float  C_snow;
 
 	float  sor_coeff;
 	float  viscosity;
@@ -43,6 +42,7 @@ struct SimParams
 	float poly6_G;
 	float spiky;
 	float spiky_G;
+	float viscosity_laplacian;
 };
 
 

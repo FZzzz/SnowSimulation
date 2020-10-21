@@ -8,6 +8,7 @@
 #include <omp.h>
 #include <chrono>
 #include <cstdlib>
+#include <algorithm>
 #include "cuda_simulation.cuh"
 
 Simulation::Simulation()
@@ -36,17 +37,23 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_particle_system = particle_system;
 	
 	uint3 grid_size = make_uint3(64, 64, 64);
-	glm::vec3 fluid_half_extends = glm::vec3(0.25f, 0.3f, 0.99f);
+	glm::vec3 fluid_half_extends = glm::vec3(0.9998f, 0.1f, 0.9998f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
-	glm::vec3 fluid_origin = glm::vec3(-0.725f, 0.35f, 0.0f);
-	glm::vec3 snow_origin = glm::vec3(0.5f, 0.251f, 0.0f);
+	glm::vec3 fluid_origin = glm::vec3(0.f, 0.11f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.f, 0.71f, 0.0f);
 	
+	const float sph_temperature = 3.f;
+	const float dem_temperature = -30.f;
+
+
 	m_neighbor_searcher = std::make_shared<NeighborSearch>(m_particle_system, grid_size);
 	m_solver = std::make_shared<ConstraintSolver>(mode);
 
 	SetupSimParams();
 	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, false);
 	GenerateParticleCube(snow_half_extends, snow_origin, 1, false);
+	InitializeTemperature(m_particle_system->getSPHParticles()->m_temperature, sph_temperature);
+	InitializeTemperature(m_particle_system->getDEMParticles()->m_temperature, dem_temperature);
 	InitializeBoundaryParticles();
 
 #ifdef _USE_CUDA_
@@ -152,77 +159,30 @@ bool Simulation::StepCUDA(float dt)
 	cudaGraphicsResource** dem_vbo_resource = m_particle_system->getDEMCUDAGraphicsResource();
 	cudaGraphicsResource** b_vbo_resource = m_particle_system->getBoundaryCUDAGraphicsResource();
 	
-	glm::vec3* positions = sph_particles->m_positions.data();
+	//glm::vec3* positions = sph_particles->m_positions.data();
 
 	unsigned int sph_num_particles = sph_particles->m_size;
 	unsigned int dem_num_particles = dem_particles->m_size;
 	unsigned int b_num_particles = boundary_particles->m_size;
 
 	// Map vbo to m_d_positinos
-	cudaGraphicsMapResources(1, sph_vbo_resource, 0);
-	cudaGraphicsMapResources(1, dem_vbo_resource, 0);
+	cudaGraphicsMapResources(1, &sph_vbo_resource[0], 0);
+	cudaGraphicsMapResources(1, &sph_vbo_resource[1], 0);
+
+	cudaGraphicsMapResources(1, &dem_vbo_resource[0], 0);
+	cudaGraphicsMapResources(1, &dem_vbo_resource[1], 0);
+
 	cudaGraphicsMapResources(1, b_vbo_resource, 0);
 
 	size_t num_bytes;
-	cudaGraphicsResourceGetMappedPointer((void**)&(sph_particles->m_device_data.m_d_positions), &num_bytes, *sph_vbo_resource);
-	cudaGraphicsResourceGetMappedPointer((void**)&(dem_particles->m_device_data.m_d_positions), &num_bytes, *dem_vbo_resource);
-	//cudaGraphicsResourceGetMappedPointer((void**)&(dem_particles->m_d_wetness), &num_bytes, dem_vbo_resource[1]);
+	cudaGraphicsResourceGetMappedPointer((void**)&(sph_particles->m_device_data.m_d_positions), &num_bytes, sph_vbo_resource[0]);
+	cudaGraphicsResourceGetMappedPointer((void**)&(sph_particles->m_device_data.m_d_T), &num_bytes, sph_vbo_resource[1]);
+	cudaGraphicsResourceGetMappedPointer((void**)&(dem_particles->m_device_data.m_d_positions), &num_bytes, dem_vbo_resource[0]);
+	cudaGraphicsResourceGetMappedPointer((void**)&(dem_particles->m_device_data.m_d_T), &num_bytes, dem_vbo_resource[1]);
 	cudaGraphicsResourceGetMappedPointer((void**)&(boundary_particles->m_device_data.m_d_positions), &num_bytes, *b_vbo_resource);
 	
 	// Integrate
 	//integrate(particles->m_d_positions, particles->m_d_velocity, dt, particles->m_size);
-
-	t1 = std::chrono::high_resolution_clock::now();
-	integrate_pbd(
-		sph_particles,
-		dt,
-		sph_num_particles,
-		cd_on
-	);
-	
-	integrate_pbd(
-		dem_particles,
-		dt,
-		dem_num_particles,
-		cd_on
-	);
-
-	t2 = std::chrono::high_resolution_clock::now();
-	// Neighbor search
-	calculate_hash(
-		m_neighbor_searcher->m_d_sph_cell_data,
-		sph_particles->m_device_data.m_d_predict_positions,
-		sph_num_particles
-	);
-	sort_particles(
-		m_neighbor_searcher->m_d_sph_cell_data,
-		sph_num_particles
-	);
-	reorder_data(
-		m_neighbor_searcher->m_d_sph_cell_data,
-		//particles->m_d_positions,
-		sph_particles->m_device_data.m_d_predict_positions,
-		sph_num_particles,
-		m_neighbor_searcher->m_num_grid_cells
-	);
-
-	// DEM particles
-	calculate_hash(
-		m_neighbor_searcher->m_d_dem_cell_data,
-		dem_particles->m_device_data.m_d_predict_positions,
-		dem_num_particles
-		);
-	sort_particles(
-		m_neighbor_searcher->m_d_dem_cell_data,
-		dem_num_particles
-		);
-	reorder_data(
-		m_neighbor_searcher->m_d_dem_cell_data,
-		//particles->m_d_positions,
-		dem_particles->m_device_data.m_d_predict_positions,
-		dem_num_particles,
-		m_neighbor_searcher->m_num_grid_cells
-		);
 
 	t3 = std::chrono::high_resolution_clock::now();
 
@@ -240,7 +200,8 @@ bool Simulation::StepCUDA(float dt)
 		m_iterations,
 		correct_dem,
 		sph_sph_correction,
-		dem_friction
+		dem_friction,
+		cd_on
 		);
 
 	t4 = std::chrono::high_resolution_clock::now();
@@ -254,8 +215,10 @@ bool Simulation::StepCUDA(float dt)
 	}
 	
 	// Unmap CUDA buffer object
-	cudaGraphicsUnmapResources(1, sph_vbo_resource, 0);
-	cudaGraphicsUnmapResources(1, dem_vbo_resource, 0);
+	cudaGraphicsUnmapResources(1, &sph_vbo_resource[0], 0);
+	cudaGraphicsUnmapResources(1, &sph_vbo_resource[1], 0);
+	cudaGraphicsUnmapResources(1, &dem_vbo_resource[0], 0);
+	cudaGraphicsUnmapResources(1, &dem_vbo_resource[1], 0);
 	cudaGraphicsUnmapResources(1, b_vbo_resource, 0);
 	//m_pause = true;
 
@@ -338,9 +301,9 @@ void Simulation::setClipLength(int length)
 void Simulation::SetupSimParams()
 {
 	//const size_t n_particles = 1000;
-	const float particle_mass = 0.035f;
+	const float particle_mass = 0.05f;
 	const float n_kernel_particles = 20.f;	
-	const float dem_sph_ratio = 0.1f;
+	const float dem_sph_ratio = 1.0f;
 	// water density = 1000 kg/m^3
 	m_rest_density = 1000.f; 
 	m_sph_particle_mass = particle_mass;
@@ -361,7 +324,7 @@ void Simulation::SetupSimParams()
 
 	m_sim_params->gravity = make_float3(0.f, -9.8f, 0.f);
 	m_sim_params->global_damping = 1.f;
-	m_sim_params->maximum_speed = 50.f;
+	m_sim_params->maximum_speed = 500.f;
 
 	m_sim_params->particle_radius = particle_radius;
 	m_sim_params->effective_radius = effective_radius;
@@ -372,7 +335,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->num_cells = m_neighbor_searcher->m_num_grid_cells;
 	m_sim_params->world_origin = make_float3(0, 0, 0);
 	m_sim_params->cell_size = make_float3(m_sim_params->effective_radius);
-	m_sim_params->boundary_damping = 0.98f;
+	m_sim_params->boundary_damping = 0.5f;
 	
 	//coupling coefficients
 	//m_sim_params->sph_dem_corr = 0.05f;
@@ -381,24 +344,23 @@ void Simulation::SetupSimParams()
 	m_sim_params->kinematic_friction = 0.75f;
 
 	m_sim_params->scorr_coeff = 0.1f;
-	m_sim_params->sor_coeff = 1.0f * (1.f/8.f);
-	m_sim_params->viscosity = 0.01f;
+	m_sim_params->sor_coeff = 1.0f * (1.f/4.f);
+	m_sim_params->viscosity = 0.001f;
 
+	//set up heat conduction constants
+	m_sim_params->C_snow = 2090.f;
+	m_sim_params->C_water = 4182.f;
+	m_sim_params->k_snow = 250.f;
+	m_sim_params->k_water = 60.f;
+
+	// set up sph kernel constants
 	m_sim_params->poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));
 	m_sim_params->poly6_G = (-945.0f / (32.0f * M_PI * glm::pow(effective_radius, 9)));
 	m_sim_params->spiky = (15.0f / (M_PI * glm::pow(effective_radius, 6)));
 	m_sim_params->spiky_G = (-45.0f / (M_PI * glm::pow(effective_radius, 6)));
-
-	// wetness settings
-	m_sim_params->wetness_max = 1.f;
-	m_sim_params->wetness_threshold = 0.5f;
-	m_sim_params->k_p = 0.5f;
-	m_sim_params->k_bridge = 20.f;
-
+	m_sim_params->viscosity_laplacian = (45.f / (M_PI * glm::pow(effective_radius, 6)));
 
 	m_particle_system->setParticleRadius(particle_radius);
-
-	
 
 	set_sim_params(m_sim_params);
 }
@@ -567,6 +529,11 @@ void Simulation::InitializeBoundaryCudaData()
 
 	// Unmap CUDA buffer object
 	cudaGraphicsUnmapResources(1, vbo_resource, 0);
+}
+
+void Simulation::InitializeTemperature(std::vector<float>& target, float temperature)
+{
+	std::fill(target.begin(), target.end(), temperature);
 }
 
 void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, int opt, bool use_jitter=false)

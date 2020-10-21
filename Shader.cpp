@@ -225,6 +225,7 @@ bool Shader::SetupShader(const GLchar * vsPath, const GLchar * fsPath, const GLc
 
 bool Shader::SetupShader(const GLchar* vsPath, const GLchar* fsPath)
 {
+	cout << "Creating shader: " << m_name << endl;
 	const GLchar* vs_path = vsPath;
 	const GLchar* fs_path = fsPath;
 	string vs_code;

@@ -28,6 +28,11 @@ struct ParticleDeviceData
 	float* m_d_C;
 	float* m_d_lambda;
 	float* m_d_volume;
+
+	/* heat conduction parameters */
+	float* m_d_T;
+	float* m_d_new_T;
+	float  m_d_heat_C;
 };
 
 class ParticleSet
@@ -43,7 +48,6 @@ public:
 	void OnCollision(size_t i, Collider* other, float dt);
 
 	void ResetPositions(std::vector<glm::vec3> positions, float particle_mass);
-	void EraseTail(size_t start);
 
 	void ReleaseDeviceData();
 
@@ -63,6 +67,8 @@ public:
 	std::vector<float>		m_C;
 	std::vector<float>		m_lambda;
 	std::vector<float>		m_volume;
+
+	std::vector<float>		m_temperature;
 
 	ParticleDeviceData m_device_data;
 };
