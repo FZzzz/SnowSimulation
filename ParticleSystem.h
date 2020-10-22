@@ -27,10 +27,13 @@ public:
 
 	//void setParticles(std::vector<std::shared_ptr<Particle>> particles);
 	void setParticleRadius(float particle_radius);
+	void setHottestTemperature(float value) { m_hottest_temperature = value; };
+	void setCoolestTemperature(float value) { m_coolest_temperature = value; };
 
 	inline ParticleSet* getSPHParticles() { return m_sph_particles; };
 	inline ParticleSet* getDEMParticles() { return m_dem_particles; };
 	inline ParticleSet* getBoundaryParticles() { return m_boundary_particles; };
+	inline ParticleDeviceData* getBufferParticleDeviceData() { return m_buffer_device_data; };
 //	inline std::vector<std::shared_ptr<Particle>>& getParticles() { return m_particles; };
 	inline GLuint getSPH_VAO() { return m_sph_vao; };
 	inline GLuint getSPH_VBO_0() { return m_sph_vbo[0]; };
@@ -54,6 +57,8 @@ public:
 	inline double& getUpdateTime() { return m_update_elased_time; };
 
 	inline float getParticleRadius() { return m_particle_radius; };
+	inline float getHottestTemperature() { return m_hottest_temperature; };
+	inline float getCoolestTemperature() { return m_coolest_temperature; };
 
 private:
 	
@@ -67,6 +72,8 @@ private:
 	ParticleSet* m_sph_particles;
 	ParticleSet* m_dem_particles;
 	ParticleSet* m_boundary_particles;
+
+	ParticleDeviceData* m_buffer_device_data;
 
 	/* OpenGL members */
 	//std::vector<std::shared_ptr<Particle>> m_particles;
@@ -100,6 +107,9 @@ private:
 
 	//struct cudaGraphicsResource* m_dem_color_vbo_res;
 	
+	float m_hottest_temperature;
+	float m_coolest_temperature;
+
 	double m_update_elased_time;
 };
 

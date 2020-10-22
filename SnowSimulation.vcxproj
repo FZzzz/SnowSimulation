@@ -217,11 +217,13 @@
     <ClInclude Include="SimParams.h" />
     <ClInclude Include="Simulation.h" />
     <ClInclude Include="SPHKernel.h" />
+    <ClInclude Include="cuda_tool.cuh" />
     <ClInclude Include="Transform.h" />
     <ClInclude Include="util.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="cuda_simulation.cu" />
+    <CudaCompile Include="cuda_tool.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

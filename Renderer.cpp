@@ -126,7 +126,6 @@ void Renderer::RenderObjects()
 
 void Renderer::RenderParticles()
 {
-
 	const std::shared_ptr<Shader> point_shader = m_resource_manager->FindShaderByName("PointSprite");
 	const glm::mat4 pvm = m_mainCamera->m_cameraMat * glm::mat4(1);
 	point_shader->SetUniformMat4("pvm", pvm);
@@ -143,8 +142,8 @@ void Renderer::RenderParticles()
 	temp_shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
 	temp_shader->SetUniformVec3("hottest_color", glm::vec3(1, 0, 0));
 	temp_shader->SetUniformVec3("coolest_color", glm::vec3(0, 0, 1));
-	temp_shader->SetUniformFloat("hottest_temperature", 20.f);
-	temp_shader->SetUniformFloat("coolest_temperature", -30.f);
+	temp_shader->SetUniformFloat("hottest_temperature", m_particle_system->getHottestTemperature());
+	temp_shader->SetUniformFloat("coolest_temperature", m_particle_system->getCoolestTemperature());
 
 	const std::shared_ptr<Shader> shader = (m_use_temperature_shader) ? temp_shader: point_shader;
 

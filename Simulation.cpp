@@ -42,9 +42,11 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	glm::vec3 fluid_origin = glm::vec3(0.f, 0.11f, 0.0f);
 	glm::vec3 snow_origin = glm::vec3(0.f, 0.71f, 0.0f);
 	
-	const float sph_temperature = 3.f;
-	const float dem_temperature = -30.f;
+	const float sph_temperature = 0.3f;
+	const float dem_temperature = -10.f;
 
+	m_particle_system->setHottestTemperature(sph_temperature + 0.1f * glm::abs(sph_temperature));
+	m_particle_system->setCoolestTemperature(dem_temperature - 0.1f * glm::abs(dem_temperature));
 
 	m_neighbor_searcher = std::make_shared<NeighborSearch>(m_particle_system, grid_size);
 	m_solver = std::make_shared<ConstraintSolver>(mode);
@@ -54,6 +56,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	GenerateParticleCube(snow_half_extends, snow_origin, 1, false);
 	InitializeTemperature(m_particle_system->getSPHParticles()->m_temperature, sph_temperature);
 	InitializeTemperature(m_particle_system->getDEMParticles()->m_temperature, dem_temperature);
+	AppendParticleSets();
 	InitializeBoundaryParticles();
 
 #ifdef _USE_CUDA_
@@ -190,12 +193,10 @@ bool Simulation::StepCUDA(float dt)
 		sph_particles,
 		dem_particles,
 		boundary_particles,
+		m_particle_system->getBufferParticleDeviceData(),
 		m_neighbor_searcher->m_d_sph_cell_data,
 		m_neighbor_searcher->m_d_dem_cell_data,
 		m_neighbor_searcher->m_d_boundary_cell_data,
-		sph_num_particles,
-		dem_num_particles,
-		b_num_particles,
 		dt,
 		m_iterations,
 		correct_dem,
@@ -207,10 +208,12 @@ bool Simulation::StepCUDA(float dt)
 	t4 = std::chrono::high_resolution_clock::now();
 
 	{
-		ImGui::Begin("CUDA Performance");
-		ImGui::Text("Integrate:   %.5lf (ms)", (t2 - t1).count() / 1000000.0f);
-		ImGui::Text("Search:      %.5lf (ms)", (t3 - t2).count() / 1000000.0f);
-		ImGui::Text("Solve:       %.5lf (ms)", (t4 - t3).count() / 1000000.0f);
+		ImGui::Begin("Log");
+		ImGui::Text("SPH size: %u", sph_particles->m_size);
+		ImGui::Text("DEM size: %u", dem_particles->m_size);
+		//ImGui::Text("Integrate:   %.5lf (ms)", (t2 - t1).count() / 1000000.0f);
+		//ImGui::Text("Search:      %.5lf (ms)", (t3 - t2).count() / 1000000.0f);
+		//ImGui::Text("Solve:       %.5lf (ms)", (t4 - t3).count() / 1000000.0f);
 		ImGui::End();
 	}
 	
@@ -350,8 +353,11 @@ void Simulation::SetupSimParams()
 	//set up heat conduction constants
 	m_sim_params->C_snow = 2090.f;
 	m_sim_params->C_water = 4182.f;
-	m_sim_params->k_snow = 250.f;
-	m_sim_params->k_water = 60.f;
+	m_sim_params->k_snow = 25.f;
+	m_sim_params->k_water = 6.f;
+	m_sim_params->freezing_point = 0.f;
+
+	m_sim_params->blending_speed = 0.1f;
 
 	// set up sph kernel constants
 	m_sim_params->poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));
@@ -599,6 +605,18 @@ void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, 
 	}
 	//std::cout << "idx " << idx << std::endl;
 
+}
+
+void Simulation::AppendParticleSets()
+{
+	auto sph_particles = m_particle_system->getSPHParticles();
+	auto dem_particles = m_particle_system->getDEMParticles();
+#ifdef _DEBUG
+	assert(sph_particles != nullptr && dem_particles != nullptr);
+#endif
+
+	sph_particles->AppendExtraMemory(dem_particles);
+	dem_particles->AppendExtraMemory(sph_particles);
 }
 
 

@@ -257,9 +257,15 @@
     <ClInclude Include="SimParams.h">
       <Filter>Header Files\Engine\Physics</Filter>
     </ClInclude>
+    <ClInclude Include="cuda_tool.cuh">
+      <Filter>CUDA Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="cuda_simulation.cu">
+      <Filter>CUDA Files</Filter>
+    </CudaCompile>
+    <CudaCompile Include="cuda_tool.cu">
       <Filter>CUDA Files</Filter>
     </CudaCompile>
   </ItemGroup>

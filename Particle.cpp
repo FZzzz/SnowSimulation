@@ -170,7 +170,7 @@ ParticleSet::ParticleSet()
 }
 
 ParticleSet::ParticleSet(size_t n, float particle_mass)
-	: m_size(n)
+	: m_size(n), m_full_size(n)
 {
 	//m_prev_positions.resize(n, glm::vec3(0,0,0));
 	m_positions.resize(n, glm::vec3(0, 0, 0));
@@ -203,7 +203,10 @@ ParticleSet::~ParticleSet()
 	m_massInv.clear();
 	m_density.clear();
 	m_C.clear();
+
 	m_lambda.clear();
+	m_volume.clear();
+	m_temperature.clear();
 }
 
 void ParticleSet::Update(float dt)
@@ -370,18 +373,48 @@ void ParticleSet::ReleaseDeviceData()
 	// Release fluid particle cuda memory
 	if (m_device_data.m_d_predict_positions != nullptr) cudaFree(m_device_data.m_d_predict_positions);
 	if (m_device_data.m_d_new_positions != nullptr) cudaFree(m_device_data.m_d_new_positions);
-	if (m_device_data.m_d_prev_positions != nullptr) cudaFree(m_device_data.m_d_prev_velocity);
 	if (m_device_data.m_d_velocity != nullptr) cudaFree(m_device_data.m_d_velocity);
-	if (m_device_data.m_d_new_velocity != nullptr) cudaFree(m_device_data.m_d_new_velocity);
-	if (m_device_data.m_d_correction != nullptr) cudaFree(m_device_data.m_d_correction);
-
 	if (m_device_data.m_d_force!= nullptr) cudaFree(m_device_data.m_d_force);
+	if (m_device_data.m_d_correction != nullptr) cudaFree(m_device_data.m_d_correction);
 	if (m_device_data.m_d_mass != nullptr) cudaFree(m_device_data.m_d_mass);
 	if (m_device_data.m_d_massInv != nullptr) cudaFree(m_device_data.m_d_massInv);
 	if (m_device_data.m_d_density != nullptr) cudaFree(m_device_data.m_d_density);
 	if (m_device_data.m_d_C != nullptr) cudaFree(m_device_data.m_d_C);
 	if (m_device_data.m_d_lambda != nullptr) cudaFree(m_device_data.m_d_lambda);
+	if (m_device_data.m_d_volume != nullptr) cudaFree(m_device_data.m_d_volume);
 
 	if (m_device_data.m_d_T != nullptr) cudaFree(m_device_data.m_d_T);
 	if (m_device_data.m_d_new_T != nullptr) cudaFree(m_device_data.m_d_new_T);
+
+	if (m_device_data.m_d_predicate != nullptr) cudaFree(m_device_data.m_d_predicate);
+	if (m_device_data.m_d_scan_index != nullptr) cudaFree(m_device_data.m_d_scan_index);
+	if (m_device_data.m_d_new_end != nullptr) cudaFree(m_device_data.m_d_new_end);
+
+	if (m_device_data.m_d_contrib != nullptr) cudaFree(m_device_data.m_d_contrib);
+
+}
+
+void ParticleSet::AppendExtraMemory(ParticleSet* other)
+{
+	// a.insert(a.end(), b.begin(), b.end());
+	std::vector<glm::vec3> float3_inf_vec(other->m_size, glm::vec3(INFINITY));
+	std::vector<glm::vec3> float3_zero_vec(other->m_size, glm::vec3(0));
+	std::vector<float> float_inf_vec(other->m_size, INFINITY);
+	std::vector<float> float_zero_vec(other->m_size, 0);
+
+	m_positions.insert(m_positions.end(), float3_inf_vec.begin(), float3_inf_vec.end());
+	m_predict_positions.insert(m_predict_positions.end(), float3_inf_vec.begin(), float3_inf_vec.end());
+	m_new_positions.insert(m_new_positions.end(), float3_inf_vec.begin(), float3_inf_vec.end());
+	m_velocity.insert(m_velocity.end(), float3_zero_vec.begin(), float3_zero_vec.end());
+	m_force.insert(m_force.end(), float3_zero_vec.begin(), float3_zero_vec.end());
+	
+	m_mass.insert(m_mass.end(), float_zero_vec.begin(), float_zero_vec.end());
+	m_massInv.insert(m_massInv.end(), float_zero_vec.begin(), float_zero_vec.end());
+	m_density.insert(m_density.end(), float_zero_vec.begin(), float_zero_vec.end());
+	m_C.insert(m_C.end(), float_zero_vec.begin(), float_zero_vec.end());
+	m_lambda.insert(m_lambda.end(), float_zero_vec.begin(), float_zero_vec.end());
+	//m_volume.insert(m_C.end(), float_zero_vec.begin(), float_zero_vec.end());
+	m_temperature.insert(m_temperature.end(), float_zero_vec.begin(), float_zero_vec.end());
+
+	m_full_size = m_size + other->m_size;
 }

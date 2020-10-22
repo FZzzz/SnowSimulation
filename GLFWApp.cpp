@@ -428,7 +428,7 @@ void GLFWApp::Update()
 	
 	float dt = m_currentTime - m_previousTime;
 
-	const float time_step = 0.0005f;
+	const float time_step = 0.00075f;
 #ifdef _USE_CUDA_
 	m_simulator->StepCUDA(time_step);
 #else

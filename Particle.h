@@ -5,6 +5,7 @@
 #include <vector>
 #include <glm/common.hpp>
 #include <cuda_runtime.h>
+#include <helper_math.h>
 #include "Collider.h"
 
 class Particle;
@@ -12,13 +13,10 @@ using Particle_Ptr = std::shared_ptr<Particle>;
 
 struct ParticleDeviceData
 {
-	float3* m_d_prev_positions;
 	float3* m_d_positions;
 	float3* m_d_predict_positions;
 	float3* m_d_new_positions;
-	float3* m_d_prev_velocity;
 	float3* m_d_velocity;
-	float3* m_d_new_velocity;
 	float3* m_d_force;
 	float3* m_d_correction;
 
@@ -32,7 +30,13 @@ struct ParticleDeviceData
 	/* heat conduction parameters */
 	float* m_d_T;
 	float* m_d_new_T;
-	float  m_d_heat_C;
+	
+	/*blending contribution*/
+	float* m_d_contrib;
+
+	uint*  m_d_predicate;
+	uint*  m_d_scan_index;
+	uint*  m_d_new_end;
 };
 
 class ParticleSet
@@ -50,8 +54,13 @@ public:
 	void ResetPositions(std::vector<glm::vec3> positions, float particle_mass);
 
 	void ReleaseDeviceData();
+	void AppendExtraMemory(ParticleSet* other);
 
+	void setSize(uint size) { m_size = size; };
+
+	// the number of particle to render
 	size_t m_size;
+	size_t m_full_size;
 
 	//std::vector<glm::vec3>	m_prev_positions;
 	std::vector<glm::vec3>	m_positions;

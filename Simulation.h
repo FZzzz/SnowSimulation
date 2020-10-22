@@ -57,7 +57,9 @@ private:
 	void InitializeBoundaryCudaData();
 	void InitializeTemperature(std::vector<float>& target, float temperature);
 	void GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, int opt, bool use_jitter);
+	void AppendParticleSets();
 
+	/**The below are CPU-only functions**/
 	void PredictPositions(float dt);
 	void FindNeighborParticles(float effective_radius);
 	

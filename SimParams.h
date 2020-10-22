@@ -28,6 +28,9 @@ struct SimParams
 	float  k_snow;
 	float  C_water;
 	float  C_snow;
+	float  freezing_point;
+
+	float  blending_speed;
 
 	float  sor_coeff;
 	float  viscosity;

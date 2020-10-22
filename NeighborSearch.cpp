@@ -52,24 +52,24 @@ void NeighborSearch::InitializeCUDA()
     /* SPH cell data initialization */
     if (sph_particles != nullptr)
     {
-        cudaMalloc((void**)&m_d_sph_cell_data.grid_hash, sph_particles->m_size * sizeof(uint));
-        cudaMalloc((void**)&m_d_sph_cell_data.grid_index, sph_particles->m_size * sizeof(uint));
+        cudaMalloc((void**)&m_d_sph_cell_data.grid_hash, sph_particles->m_full_size * sizeof(uint));
+        cudaMalloc((void**)&m_d_sph_cell_data.grid_index, sph_particles->m_full_size * sizeof(uint));
 
         cudaMalloc((void**)&m_d_sph_cell_data.cell_start, m_num_grid_cells * sizeof(uint));
         cudaMalloc((void**)&m_d_sph_cell_data.cell_end, m_num_grid_cells * sizeof(uint));
 
-        cudaMalloc((void**)&m_d_sph_cell_data.sorted_pos, sph_particles->m_size * sizeof(float3));
+        cudaMalloc((void**)&m_d_sph_cell_data.sorted_pos, sph_particles->m_full_size* sizeof(float3));
     }
 
     if (dem_particles != nullptr)
     {
-        cudaMalloc((void**)&m_d_dem_cell_data.grid_hash, dem_particles->m_size * sizeof(uint));
-        cudaMalloc((void**)&m_d_dem_cell_data.grid_index, dem_particles->m_size * sizeof(uint));
+        cudaMalloc((void**)&m_d_dem_cell_data.grid_hash, dem_particles->m_full_size * sizeof(uint));
+        cudaMalloc((void**)&m_d_dem_cell_data.grid_index, dem_particles->m_full_size * sizeof(uint));
 
         cudaMalloc((void**)&m_d_dem_cell_data.cell_start, m_num_grid_cells * sizeof(uint));
         cudaMalloc((void**)&m_d_dem_cell_data.cell_end, m_num_grid_cells * sizeof(uint));
 
-        cudaMalloc((void**)&m_d_dem_cell_data.sorted_pos, dem_particles->m_size * sizeof(float3));
+        cudaMalloc((void**)&m_d_dem_cell_data.sorted_pos, dem_particles->m_full_size * sizeof(float3));
     }
 
     /* Boundary particle cell data initialization */
