@@ -396,6 +396,8 @@ void ParticleSet::ReleaseDeviceData()
 
 void ParticleSet::AppendExtraMemory(ParticleSet* other)
 {
+	if (m_size == 0)
+		return;
 	// a.insert(a.end(), b.begin(), b.end());
 	std::vector<glm::vec3> float3_inf_vec(other->m_size, glm::vec3(INFINITY));
 	std::vector<glm::vec3> float3_zero_vec(other->m_size, glm::vec3(0));
@@ -408,8 +410,8 @@ void ParticleSet::AppendExtraMemory(ParticleSet* other)
 	m_velocity.insert(m_velocity.end(), float3_zero_vec.begin(), float3_zero_vec.end());
 	m_force.insert(m_force.end(), float3_zero_vec.begin(), float3_zero_vec.end());
 	
-	m_mass.insert(m_mass.end(), float_zero_vec.begin(), float_zero_vec.end());
-	m_massInv.insert(m_massInv.end(), float_zero_vec.begin(), float_zero_vec.end());
+	m_mass.insert(m_mass.end(), other->m_size, m_mass[0]);
+	m_massInv.insert(m_massInv.end(), other->m_size, m_massInv[0]);
 	m_density.insert(m_density.end(), float_zero_vec.begin(), float_zero_vec.end());
 	m_C.insert(m_C.end(), float_zero_vec.begin(), float_zero_vec.end());
 	m_lambda.insert(m_lambda.end(), float_zero_vec.begin(), float_zero_vec.end());

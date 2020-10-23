@@ -13,6 +13,7 @@ struct SimParams
 	// pbf sph coeffcients
 	float  epsilon;
 	float  pbd_epsilon;
+	float  kernel_epsilon;
 	float  effective_radius;
 	float  particle_radius;
 	float  rest_density;

@@ -43,7 +43,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	glm::vec3 snow_origin = glm::vec3(0.f, 0.71f, 0.0f);
 	
 	const float sph_temperature = 0.3f;
-	const float dem_temperature = -10.f;
+	const float dem_temperature = -3.f;
 
 	m_particle_system->setHottestTemperature(sph_temperature + 0.1f * glm::abs(sph_temperature));
 	m_particle_system->setCoolestTemperature(dem_temperature - 0.1f * glm::abs(dem_temperature));
@@ -52,8 +52,8 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_solver = std::make_shared<ConstraintSolver>(mode);
 
 	SetupSimParams();
-	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, false);
-	GenerateParticleCube(snow_half_extends, snow_origin, 1, false);
+	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, true);
+	GenerateParticleCube(snow_half_extends, snow_origin, 1, true);
 	InitializeTemperature(m_particle_system->getSPHParticles()->m_temperature, sph_temperature);
 	InitializeTemperature(m_particle_system->getDEMParticles()->m_temperature, dem_temperature);
 	AppendParticleSets();
@@ -304,7 +304,7 @@ void Simulation::setClipLength(int length)
 void Simulation::SetupSimParams()
 {
 	//const size_t n_particles = 1000;
-	const float particle_mass = 0.05f;
+	const float particle_mass = 0.015f;
 	const float n_kernel_particles = 20.f;	
 	const float dem_sph_ratio = 1.0f;
 	// water density = 1000 kg/m^3
@@ -332,13 +332,14 @@ void Simulation::SetupSimParams()
 	m_sim_params->particle_radius = particle_radius;
 	m_sim_params->effective_radius = effective_radius;
 	m_sim_params->rest_density = m_rest_density;
-	m_sim_params->epsilon = 1000.f;
-	m_sim_params->pbd_epsilon = 0.8f * particle_radius;
+	m_sim_params->epsilon = 100.f;
+	m_sim_params->pbd_epsilon = 0.75f * particle_radius;
+	m_sim_params->kernel_epsilon = 0;// 0.0001f * effective_radius;
 	m_sim_params->grid_size = m_neighbor_searcher->m_grid_size;
 	m_sim_params->num_cells = m_neighbor_searcher->m_num_grid_cells;
 	m_sim_params->world_origin = make_float3(0, 0, 0);
 	m_sim_params->cell_size = make_float3(m_sim_params->effective_radius);
-	m_sim_params->boundary_damping = 0.5f;
+	m_sim_params->boundary_damping = 0.98f;
 	
 	//coupling coefficients
 	//m_sim_params->sph_dem_corr = 0.05f;
@@ -353,8 +354,8 @@ void Simulation::SetupSimParams()
 	//set up heat conduction constants
 	m_sim_params->C_snow = 2090.f;
 	m_sim_params->C_water = 4182.f;
-	m_sim_params->k_snow = 25.f;
-	m_sim_params->k_water = 6.f;
+	m_sim_params->k_snow = 2.5f;
+	m_sim_params->k_water = 0.6f;
 	m_sim_params->freezing_point = 0.f;
 
 	m_sim_params->blending_speed = 0.1f;

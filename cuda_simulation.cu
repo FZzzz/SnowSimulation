@@ -103,7 +103,7 @@ inline __device__ float3 sph_kernel_Spiky_W_Gradient(const float3& diff, const f
 		float q2 = q * q;
 
 		//float scalar = (-45.0f / (CUDART_PI*h6)) * (q2 / distance);
-		float scalar = params.spiky_G * (q2 / distance);
+		float scalar = params.spiky_G * (q2 / (distance + params.kernel_epsilon));
 		float3 result = scalar * diff;// make_float3(diff.x, diff.y, diff.z);
 
 		return result;
@@ -1430,7 +1430,7 @@ void apply_correction(
 	//predict_pos[index] = new_pos[index];
 	
 	uint original_index = cell_data.grid_index[index];
-
+	
 	new_pos[original_index] = cell_data.sorted_pos[index] + params.sor_coeff * correction[original_index];
 	predict_pos[original_index] = new_pos[original_index];
 	// write back to sorted_pos for next iteration
@@ -1713,7 +1713,7 @@ float3 pbd_distance_correction(
 					C = dist - 2.f * params.particle_radius;
 					
 					// normalize v + 0.000001f for vanish problem
-					float3 n = v / dist + params.pbd_epsilon;// +0.000001f);
+					float3 n = v / (dist + params.pbd_epsilon);// +0.000001f);
 
 					correction_j = -w0 * (1.f / w_sum) * C * n;
 		
@@ -1771,7 +1771,7 @@ float3 pbd_distance_correction_boundary(
 				C = dist - 2.f * params.particle_radius;
 
 				// normalize v + 0.000001f to prevent not becoming infinite
-				float3 n = v / (dist) + params.pbd_epsilon;// +0.000001f);
+				float3 n = v / (dist + params.pbd_epsilon);// +0.000001f);
 
 				correction_j = -w0 * (1.f / w_sum) * C * n;
 			}
@@ -1892,7 +1892,7 @@ float3 pbd_friction_correction(
 					float w_sum = w0 + w1;
 
 					// normalize v + 0.000001f for vanish problem
-					float3 n = v / (dist);// +0.000001f);
+					float3 n = v / (dist + params.pbd_epsilon);
 
 					float penetration = 2.f * params.particle_radius - dist;
 					float3 dx = (predict_pos0 - original_pos0) + (predict_pos1 - original_pos1);
@@ -1971,7 +1971,7 @@ float3 pbd_friction_correction_boundary(
 				float w_sum = w0 + w1;
 
 				// normalize v + 0.000001f for vanish problem
-				float3 n = v / (dist);// +0.000001f);
+				float3 n = v / (dist + params.pbd_epsilon);// +0.000001f);
 
 				float penetration = 2.f * params.particle_radius - dist;
 				float3 dx = (predict_pos0 - original_pos0);
@@ -3736,8 +3736,8 @@ float heat_transfer_cell(
 	float   T_i,
 	float   k_i,
 	float	k_j,
-	const ParticleDeviceData& other_data,
-	const CellData& target_cell_data,
+	ParticleDeviceData other_data,
+	CellData target_cell_data,
 	bool	coupling=false
 )
 {
@@ -3938,7 +3938,7 @@ void transfer_heat(
 
 // copy data0[index] to data1[target_index]
 inline __device__
-void copy_particle_info(ParticleDeviceData& src, ParticleDeviceData& dst, uint index, uint target_index)
+void copy_particle_info(ParticleDeviceData src, ParticleDeviceData dst, uint index, uint target_index)
 {
 	dst.m_d_positions[target_index] = src.m_d_positions[index];
 	dst.m_d_predict_positions[target_index] = src.m_d_predict_positions[index];
@@ -3956,35 +3956,24 @@ void copy_particle_info(ParticleDeviceData& src, ParticleDeviceData& dst, uint i
 	//dst.m_d_predicate[target_index] = 1;  //set predicate to 1 so that exclusive scan work correctly
 }
 
-__global__
-void predicate_and_fill(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint predicate_size)
+inline __device__
+void clean_particle_info(ParticleDeviceData dst, uint target_index)
 {
-	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
-
-	if (index >= predicate_size)
-		return;
-
-	// freeze -> put this particle's information to dem's tail
-	if (sph_data.m_d_T[index] <= params.freezing_point)
-	{
-		uint target_index;
-		target_index = atomicAdd(dem_data.m_d_new_end, 1);
-		copy_particle_info(sph_data, dem_data, index, target_index);
-		
-		sph_data.m_d_predicate[index] = 0;
-		dem_data.m_d_predicate[target_index] = 1;
-	}
-	
-	// melt -> put information to sph's tail
-	if (dem_data.m_d_T[index] > params.freezing_point)
-	{
-		uint target_index;
-		target_index = atomicAdd(sph_data.m_d_new_end, 1);
-		copy_particle_info(dem_data, sph_data, index, target_index);
-		
-		dem_data.m_d_predicate[index] = 0;
-		sph_data.m_d_predicate[target_index] = 1;
-	}
+	dst.m_d_positions[target_index] = make_float3(INFINITY);
+	dst.m_d_predict_positions[target_index] = make_float3(INFINITY);
+	dst.m_d_new_positions[target_index] = make_float3(INFINITY);
+	dst.m_d_velocity[target_index] = make_float3(0);
+	dst.m_d_force[target_index] = make_float3(0);
+	dst.m_d_correction[target_index] = make_float3(0);
+	//dst.m_d_mass[target_index] = src.m_d_mass[index];
+	//dst.m_d_massInv[target_index] = src.m_d_massInv[index];
+	dst.m_d_density[target_index] = 0;
+	dst.m_d_C[target_index] = 0;
+	dst.m_d_lambda[target_index] = 0;
+	dst.m_d_T[target_index] = INFINITY;
+	dst.m_d_new_T[target_index] = INFINITY;
+	dst.m_d_predicate[target_index] = 0;
+	dst.m_d_scan_index[target_index] = 0; // <- maybe this doesn't need to update
 }
 
 __global__
@@ -4014,12 +4003,14 @@ void freezing(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num
 
 	if (index >= num_particles)
 		return;
-
+	
 	// freeze -> put this particle's information to dem's tail
 	if (sph_data.m_d_T[index] <= params.freezing_point)
 	{
 		uint target_index;
 		target_index = atomicAdd(dem_data.m_d_new_end, 1);
+		//printf("target_index: %u\n", target_index);
+		
 		copy_particle_info(sph_data, dem_data, index, target_index);
 
 		sph_data.m_d_predicate[index] = 0;
@@ -4063,12 +4054,11 @@ void clean_tail(ParticleDeviceData data, uint num_particles)
 	if (index >= num_particles)
 		return;
 
-	data.m_d_predicate[index] = 0;
-	data.m_d_scan_index[index] = 0;
+	clean_particle_info(data, index);
 
 }
 
-void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, ParticleDeviceData& buffer)
+void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, ParticleDeviceData buffer)
 {
 	uint num_threads, num_blocks;
 	uint sph_new_size, dem_new_size;
@@ -4083,18 +4073,18 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	sph_new_size = thrust::count(sph_predicate_ptr, sph_predicate_ptr + full_size, 1u);
 	dem_new_size = thrust::count(dem_predicate_ptr, dem_predicate_ptr + full_size, 1u);
 
-	thrust::exclusive_scan(sph_predicate_ptr, sph_predicate_ptr + sph_particles->m_size, sph_scan_ptr, 0u);
-	thrust::exclusive_scan(dem_predicate_ptr, dem_predicate_ptr + dem_particles->m_size, dem_scan_ptr, 0u);
+	thrust::exclusive_scan(sph_predicate_ptr, sph_predicate_ptr + full_size, sph_scan_ptr, 0u);
+	thrust::exclusive_scan(dem_predicate_ptr, dem_predicate_ptr + full_size, dem_scan_ptr, 0u);
 
 	// copy sph to tmp
 	compute_grid_size(sph_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	copy_to_target <<<num_blocks, num_threads>>> (sph_particles->m_device_data, buffer, sph_particles->m_size);
+	copy_to_target <<<num_blocks, num_threads>>> (sph_particles->m_device_data, buffer, full_size);
 	scatter <<<num_blocks, num_threads >>> (sph_particles->m_device_data, buffer, sph_particles->m_size);
 	getLastCudaError("Kernel execution failed: scatter ");
 
 	// copy dem to tmp
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	copy_to_target <<<num_blocks, num_threads >>> (dem_particles->m_device_data, buffer, dem_particles->m_size);
+	copy_to_target <<<num_blocks, num_threads >>> (dem_particles->m_device_data, buffer, full_size);
 	scatter <<< num_blocks, num_threads >>> (dem_particles->m_device_data, buffer, dem_particles->m_size);
 	getLastCudaError("Kernel execution failed: scatter ");
 
@@ -4109,11 +4099,10 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	uint sph_tail_size = full_size - sph_new_size, dem_tail_size = full_size - dem_new_size;
 	
 	thrust::fill(sph_predicate_ptr, sph_predicate_ptr + sph_new_size, 1u);
-	thrust::fill(sph_predicate_ptr+sph_new_size, sph_predicate_ptr + full_size, 0u);
+	thrust::fill(sph_predicate_ptr + sph_new_size, sph_predicate_ptr + full_size, 0u);
 
 	thrust::fill(dem_predicate_ptr, dem_predicate_ptr + dem_new_size, 1u);
 	thrust::fill(dem_predicate_ptr + dem_new_size, dem_predicate_ptr + full_size, 0u);
-	
 	/*
 	compute_grid_size(sph_tail_size, MAX_THREAD_NUM, num_blocks, num_threads);
 	clean_tail <<<num_blocks, num_threads>>> (sph_particles->m_device_data, sph_tail_size);
@@ -4128,7 +4117,7 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 void phase_change(
 	ParticleSet* sph_particles,
 	ParticleSet* dem_particles,
-	ParticleDeviceData&  buffer
+	ParticleDeviceData  buffer
 )
 {
 	if (sph_particles->m_full_size != dem_particles->m_full_size)
@@ -4172,9 +4161,6 @@ void snow_simulation(
 	uint dem_num_threads, dem_num_blocks;
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
 
-	integrate_pbd(sph_particles, dt, sph_particles->m_size, cd_on);
-	integrate_pbd(dem_particles, dt, dem_particles->m_size, cd_on);
-
 	sort_and_reorder(
 		dem_particles->m_device_data.m_d_predict_positions,
 		dem_cell_data,
@@ -4216,6 +4202,11 @@ void snow_simulation(
 	);
 
 	phase_change(sph_particles, dem_particles, *phase_change_buffer);
+
+
+	integrate_pbd(sph_particles, dt, sph_particles->m_size, cd_on);
+	integrate_pbd(dem_particles, dt, dem_particles->m_size, cd_on);
+
 
 	for (int i = 0; i < iterations; ++i)
 	{

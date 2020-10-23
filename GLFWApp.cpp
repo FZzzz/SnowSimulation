@@ -223,7 +223,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 
 	// Simulation control settings
 	{
-		uint32_t iterations = 3;
+		uint32_t iterations = 6;
 		int clip_length = 200000;
 		m_simulator->SetSolverIteration(iterations);
 		m_simulator->setClipLength(clip_length);
@@ -428,7 +428,7 @@ void GLFWApp::Update()
 	
 	float dt = m_currentTime - m_previousTime;
 
-	const float time_step = 0.00075f;
+	const float time_step = 0.001f;
 #ifdef _USE_CUDA_
 	m_simulator->StepCUDA(time_step);
 #else

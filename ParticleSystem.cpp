@@ -699,7 +699,7 @@ void ParticleSystem::UpdateGLBUfferData()
 	glBindVertexArray(m_sph_vao);
 
 	glBindBuffer(GL_ARRAY_BUFFER, m_sph_vbo[0]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * m_sph_particles->m_positions.size(),
+	glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * m_sph_particles->m_full_size,
 		m_sph_particles->m_positions.data(), GL_DYNAMIC_DRAW);
 
 	glEnableVertexAttribArray(0);
@@ -708,7 +708,7 @@ void ParticleSystem::UpdateGLBUfferData()
 
 	// bind temperature buffer
 	glBindBuffer(GL_ARRAY_BUFFER, m_sph_vbo[1]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * m_sph_particles->m_temperature.size(),
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * m_sph_particles->m_full_size,
 		m_sph_particles->m_temperature.data(), GL_DYNAMIC_DRAW);
 
 	glEnableVertexAttribArray(1);
@@ -719,7 +719,7 @@ void ParticleSystem::UpdateGLBUfferData()
 
 	if (m_dem_particles != nullptr && m_dem_particles->m_size != 0)
 	{
-		size_t n = m_dem_particles->m_positions.size();
+		size_t n = m_dem_particles->m_full_size;
 
 		glBindVertexArray(m_dem_vao);
 
