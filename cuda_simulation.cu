@@ -717,7 +717,7 @@ float pbf_lambda_0(
 				float3 gradientC_j;
 
 				gradientC_j = (1.f / params.rest_density) *
-					sph_kernel_Poly6_W_Gradient(vec, dist, params.effective_radius);
+					sph_kernel_Spiky_W_Gradient(vec, dist, params.effective_radius);
 
 				float dot_val = dot(gradientC_j, gradientC_j);
 				gradientC_sum += dot_val;
@@ -767,7 +767,7 @@ float pbf_lambda_1(
 
 				gradientC_j = (1.f / params.rest_density) *
 						(params.rest_density * vol / particle_mass) *
-						sph_kernel_Poly6_W_Gradient(vec, dist, params.effective_radius);
+						sph_kernel_Spiky_W_Gradient(vec, dist, params.effective_radius);
 
 				float dot_val = dot(gradientC_j, gradientC_j);
 				gradientC_sum += dot_val;
@@ -810,7 +810,7 @@ float pbf_lambda_boundary(
 
 			float3 gradientC_j = (1.f / params.rest_density) * 
 				(params.rest_density * vol / particle_mass) *  
-				sph_kernel_Poly6_W_Gradient(vec, dist, params.effective_radius);
+				sph_kernel_Spiky_W_Gradient(vec, dist, params.effective_radius);
 
 			float dot_val = dot(gradientC_j, gradientC_j);
 			gradientC_sum += dot_val;
@@ -848,7 +848,7 @@ float pbf_boundary_lambda(
 			float dist = length(vec);
 
 			float3 gradientC_j = (1.f / params.rest_density) *
-				sph_kernel_Poly6_W_Gradient(vec, dist, params.effective_radius);
+				sph_kernel_Spiky_W_Gradient(vec, dist, params.effective_radius);
 
 			float dot_val = dot(gradientC_j, gradientC_j);
 			gradientC_sum += dot_val;
@@ -895,7 +895,7 @@ float3 pbf_correction(
 				const float3 vec = pos - pos2;
 				const float dist = length(vec);
 
-				const float3 gradient = sph_kernel_Poly6_W_Gradient(vec, dist, params.effective_radius);
+				const float3 gradient = sph_kernel_Spiky_W_Gradient(vec, dist, params.effective_radius);
 				
 				float x = sph_kernel_Poly6_W(dist, params.effective_radius) / 
 					sph_kernel_Poly6_W(0.3f * params.effective_radius, params.effective_radius);
@@ -948,7 +948,7 @@ float3 pbf_correction_boundary(
 			float3 vec = pos - pos2;
 			float dist = length(vec);
 
-			float3 gradient = sph_kernel_Poly6_W_Gradient(vec, dist, params.effective_radius);
+			float3 gradient = sph_kernel_Spiky_W_Gradient(vec, dist, params.effective_radius);
 
 			float scorr = -0.1f;
 			float x = sph_kernel_Poly6_W(dist, params.effective_radius) /
@@ -3944,13 +3944,13 @@ void copy_particle_info(ParticleDeviceData src, ParticleDeviceData dst, uint ind
 	dst.m_d_predict_positions[target_index] = src.m_d_predict_positions[index];
 	dst.m_d_new_positions[target_index] = src.m_d_new_positions[index];
 	dst.m_d_velocity[target_index] = src.m_d_velocity[index];
-	dst.m_d_force[target_index] = src.m_d_force[index];
-	dst.m_d_correction[target_index] = src.m_d_correction[index];
+	//dst.m_d_force[target_index] = src.m_d_force[index];
+	//dst.m_d_correction[target_index] = src.m_d_correction[index];
 	dst.m_d_mass[target_index] = src.m_d_mass[index];
 	dst.m_d_massInv[target_index] = src.m_d_massInv[index];
-	dst.m_d_density[target_index] = src.m_d_density[index];
-	dst.m_d_C[target_index] = src.m_d_C[index];
-	dst.m_d_lambda[target_index] = src.m_d_lambda[index];
+	//dst.m_d_density[target_index] = src.m_d_density[index];
+	//dst.m_d_C[target_index] = src.m_d_C[index];
+	//dst.m_d_lambda[target_index] = src.m_d_lambda[index];
 	dst.m_d_T[target_index] = src.m_d_T[index];
 	dst.m_d_new_T[target_index] = src.m_d_new_T[index];
 	//dst.m_d_predicate[target_index] = 1;  //set predicate to 1 so that exclusive scan work correctly
@@ -4153,6 +4153,7 @@ void snow_simulation(
 	bool sph_sph_correction,
 	//bool compute_wetness,
 	bool dem_friction,
+	bool change_phase,
 	bool cd_on
 )
 {
@@ -4201,7 +4202,8 @@ void snow_simulation(
 		dem_num_threads
 	);
 
-	phase_change(sph_particles, dem_particles, *phase_change_buffer);
+	if(change_phase)
+		phase_change(sph_particles, dem_particles, *phase_change_buffer);
 
 
 	integrate_pbd(sph_particles, dt, sph_particles->m_size, cd_on);

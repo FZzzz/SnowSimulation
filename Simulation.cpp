@@ -37,7 +37,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_particle_system = particle_system;
 	
 	uint3 grid_size = make_uint3(64, 64, 64);
-	glm::vec3 fluid_half_extends = glm::vec3(0.9998f, 0.1f, 0.9998f);
+	glm::vec3 fluid_half_extends = glm::vec3(0.9999f, 0.1f, 0.9999f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
 	glm::vec3 fluid_origin = glm::vec3(0.f, 0.11f, 0.0f);
 	glm::vec3 snow_origin = glm::vec3(0.f, 0.71f, 0.0f);
@@ -52,8 +52,8 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_solver = std::make_shared<ConstraintSolver>(mode);
 
 	SetupSimParams();
-	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, true);
-	GenerateParticleCube(snow_half_extends, snow_origin, 1, true);
+	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, false);
+	GenerateParticleCube(snow_half_extends, snow_origin, 1, false);
 	InitializeTemperature(m_particle_system->getSPHParticles()->m_temperature, sph_temperature);
 	InitializeTemperature(m_particle_system->getDEMParticles()->m_temperature, dem_temperature);
 	AppendParticleSets();
@@ -149,6 +149,7 @@ bool Simulation::StepCUDA(float dt)
 	bool cd_on = true;
 	bool correct_dem = true;
 	bool sph_sph_correction = false;
+	bool change_phase = true;
 	//bool compute_wetness = false;
 	bool dem_friction = true;
 
@@ -202,6 +203,7 @@ bool Simulation::StepCUDA(float dt)
 		correct_dem,
 		sph_sph_correction,
 		dem_friction,
+		change_phase,
 		cd_on
 		);
 
@@ -326,15 +328,15 @@ void Simulation::SetupSimParams()
 	m_sim_params = new SimParams();
 
 	m_sim_params->gravity = make_float3(0.f, -9.8f, 0.f);
-	m_sim_params->global_damping = 1.f;
-	m_sim_params->maximum_speed = 500.f;
+	m_sim_params->global_damping = 1.0;
+	m_sim_params->maximum_speed = 30.f;
 
 	m_sim_params->particle_radius = particle_radius;
 	m_sim_params->effective_radius = effective_radius;
 	m_sim_params->rest_density = m_rest_density;
-	m_sim_params->epsilon = 100.f;
-	m_sim_params->pbd_epsilon = 0.75f * particle_radius;
-	m_sim_params->kernel_epsilon = 0;// 0.0001f * effective_radius;
+	m_sim_params->epsilon = 1000.f;
+	m_sim_params->pbd_epsilon = 0.01f * particle_radius;
+	m_sim_params->kernel_epsilon = 0.01f * effective_radius;
 	m_sim_params->grid_size = m_neighbor_searcher->m_grid_size;
 	m_sim_params->num_cells = m_neighbor_searcher->m_num_grid_cells;
 	m_sim_params->world_origin = make_float3(0, 0, 0);
@@ -344,18 +346,18 @@ void Simulation::SetupSimParams()
 	//coupling coefficients
 	//m_sim_params->sph_dem_corr = 0.05f;
 
-	m_sim_params->static_friction = 1.0f;
+	m_sim_params->static_friction = 0.9f;
 	m_sim_params->kinematic_friction = 0.75f;
 
 	m_sim_params->scorr_coeff = 0.1f;
 	m_sim_params->sor_coeff = 1.0f * (1.f/4.f);
-	m_sim_params->viscosity = 0.001f;
+	m_sim_params->viscosity = 0.01f;
 
 	//set up heat conduction constants
 	m_sim_params->C_snow = 2090.f;
 	m_sim_params->C_water = 4182.f;
-	m_sim_params->k_snow = 2.5f;
-	m_sim_params->k_water = 0.6f;
+	m_sim_params->k_snow = 250.f;
+	m_sim_params->k_water = 60.f;
 	m_sim_params->freezing_point = 0.f;
 
 	m_sim_params->blending_speed = 0.1f;
