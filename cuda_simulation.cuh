@@ -107,6 +107,7 @@ void snow_simulation(
     bool         correct_dem,
     bool         sph_sph_correction,
     bool         dem_friction,
+    bool         compute_temperature,
     bool         change_phase,
     bool         cd_on
 );

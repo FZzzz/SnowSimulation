@@ -148,7 +148,8 @@ bool Simulation::StepCUDA(float dt)
 
 	bool cd_on = true;
 	bool correct_dem = true;
-	bool sph_sph_correction = false;
+	bool sph_sph_correction = true;
+	bool compute_temperature = true;
 	bool change_phase = true;
 	//bool compute_wetness = false;
 	bool dem_friction = true;
@@ -203,6 +204,7 @@ bool Simulation::StepCUDA(float dt)
 		correct_dem,
 		sph_sph_correction,
 		dem_friction,
+		compute_temperature,
 		change_phase,
 		cd_on
 		);
@@ -356,11 +358,11 @@ void Simulation::SetupSimParams()
 	//set up heat conduction constants
 	m_sim_params->C_snow = 2090.f;
 	m_sim_params->C_water = 4182.f;
-	m_sim_params->k_snow = 250.f;
-	m_sim_params->k_water = 60.f;
+	m_sim_params->k_snow = 25.f;
+	m_sim_params->k_water = 6.f;
 	m_sim_params->freezing_point = 0.f;
 
-	m_sim_params->blending_speed = 0.1f;
+	m_sim_params->blending_speed = 0.01f;
 
 	// set up sph kernel constants
 	m_sim_params->poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));

@@ -100,6 +100,7 @@ void ParticleSystem::Release()
 		cudaFree(m_buffer_device_data->m_d_predicate);
 		cudaFree(m_buffer_device_data->m_d_scan_index);
 		cudaFree(m_buffer_device_data->m_d_new_end);
+		cudaFree(m_buffer_device_data->m_d_contrib);
 
 		delete m_buffer_device_data;
 	}
@@ -135,7 +136,7 @@ void ParticleSystem::SetupCUDAMemory()
 	{
 		size_t n = m_sph_particles->m_full_size;
 
-		std::vector<float> contrib(m_sph_particles->m_size, 1.0f);
+		std::vector<float> contrib(n, 1.0f);
 		std::vector<glm::vec3> vec3_zeros;
 		vec3_zeros.resize(n, glm::vec3(0, 0, 0));
 		
@@ -310,9 +311,10 @@ void ParticleSystem::SetupCUDAMemory()
 	// DEM particles
 	if(m_dem_particles != nullptr)
 	{
-		std::vector<float> contrib(m_dem_particles->m_size, 1.0f);
+		
 		size_t n = m_dem_particles->m_full_size;
 
+		std::vector<float> contrib(n, 1.0f);
 		glm::vec3* positions = m_dem_particles->m_positions.data();
 		glm::vec3* predict_positions = m_dem_particles->m_predict_positions.data();
 		glm::vec3* new_positions = m_dem_particles->m_new_positions.data();
@@ -465,7 +467,7 @@ void ParticleSystem::SetupCUDAMemory()
 
 		cudaMemcpy(
 			(void*)m_dem_particles->m_device_data.m_d_contrib,
-			(void*)m_dem_particles->m_temperature.data(),
+			(void*)contrib.data(),
 			m_dem_particles->m_size * sizeof(float),
 			cudaMemcpyHostToDevice
 		);
@@ -651,7 +653,10 @@ void ParticleSystem::SetupCUDAMemory()
 			sizeof(uint)
 		);
 
-
+		cudaMalloc(
+			(void**)&(m_buffer_device_data->m_d_contrib),
+			n * sizeof(float)
+		);
 	}
 
 }
