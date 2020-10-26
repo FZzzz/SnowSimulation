@@ -37,10 +37,10 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_particle_system = particle_system;
 	
 	uint3 grid_size = make_uint3(64, 64, 64);
-	glm::vec3 fluid_half_extends = glm::vec3(0.9999f, 0.1f, 0.9999f);
+	glm::vec3 fluid_half_extends = glm::vec3(0.998f, 0.1f, 0.998f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
 	glm::vec3 fluid_origin = glm::vec3(0.f, 0.11f, 0.0f);
-	glm::vec3 snow_origin = glm::vec3(0.f, 0.71f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.25f, 0.71f, 0.0f);
 	
 	const float sph_temperature = 0.3f;
 	const float dem_temperature = -3.f;
@@ -150,7 +150,7 @@ bool Simulation::StepCUDA(float dt)
 	bool correct_dem = true;
 	bool sph_sph_correction = true;
 	bool compute_temperature = true;
-	bool change_phase = true;
+	bool change_phase = false;
 	//bool compute_wetness = false;
 	bool dem_friction = true;
 
@@ -362,7 +362,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->k_water = 6.f;
 	m_sim_params->freezing_point = 0.f;
 
-	m_sim_params->blending_speed = 0.01f;
+	m_sim_params->blending_speed = 0.1f;
 
 	// set up sph kernel constants
 	m_sim_params->poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));

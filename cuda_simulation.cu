@@ -2351,17 +2351,16 @@ void compute_snow_dem_sph_density_d(
 				);
 			}
 		}
-
-		// Update density of fluid particle
-		dem_density[originalIndex] = rho;
-		// **repeated code**
-		// Recompute constraint value of fluid particle
-		if ((dem_density[originalIndex] / params.rest_density) - 1.f > 0)
-			dem_C[originalIndex] = (dem_density[originalIndex] / params.rest_density) - 1.f;
-		else
-			dem_C[originalIndex] = 0.f;
-
 	}	
+	// Update density of fluid particle
+	dem_density[originalIndex] = rho;
+	// **repeated code**
+	// Recompute constraint value of fluid particle
+	if ((dem_density[originalIndex] / params.rest_density) - 1.f > 0)
+		dem_C[originalIndex] = (dem_density[originalIndex] / params.rest_density) - 1.f;
+	else
+		dem_C[originalIndex] = 0.f;
+
 }
 
 __global__
@@ -3705,7 +3704,7 @@ void copy_particle_info(ParticleDeviceData src, ParticleDeviceData dst, uint ind
 	dst.m_d_new_T[target_index] = src.m_d_new_T[index];
 	//dst.m_d_predicate[target_index] = 1;  //set predicate to 1 so that exclusive scan work correctly
 }
-
+/*
 inline __device__
 void clean_particle_info(ParticleDeviceData dst, uint target_index)
 {
@@ -3725,6 +3724,7 @@ void clean_particle_info(ParticleDeviceData dst, uint target_index)
 	dst.m_d_predicate[target_index] = 0;
 	dst.m_d_scan_index[target_index] = 0; // <- maybe this doesn't need to update
 }
+*/
 
 __global__
 void melting(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_particles)
@@ -3797,7 +3797,7 @@ void scatter(ParticleDeviceData target_data, ParticleDeviceData buffer, uint num
 		copy_particle_info(buffer, target_data, index, target_index);
 	}
 }
-
+/*
 __global__
 void clean_tail(ParticleDeviceData data, uint num_particles)
 {
@@ -3810,7 +3810,7 @@ void clean_tail(ParticleDeviceData data, uint num_particles)
 	clean_particle_info(data, index);
 
 }
-
+*/
 void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, ParticleDeviceData buffer)
 {
 	uint num_threads, num_blocks;
@@ -3831,13 +3831,13 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 
 	// copy sph to tmp
 	compute_grid_size(sph_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	copy_to_target <<<num_blocks, num_threads>>> (sph_particles->m_device_data, buffer, full_size);
+	copy_to_target <<<num_blocks, num_threads>>> (sph_particles->m_device_data, buffer, sph_particles->m_size);
 	scatter <<<num_blocks, num_threads >>> (sph_particles->m_device_data, buffer, sph_particles->m_size);
 	getLastCudaError("Kernel execution failed: scatter ");
 
 	// copy dem to tmp
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	copy_to_target <<<num_blocks, num_threads >>> (dem_particles->m_device_data, buffer, full_size);
+	copy_to_target <<<num_blocks, num_threads >>> (dem_particles->m_device_data, buffer, dem_particles->m_size);
 	scatter <<< num_blocks, num_threads >>> (dem_particles->m_device_data, buffer, dem_particles->m_size);
 	getLastCudaError("Kernel execution failed: scatter ");
 
