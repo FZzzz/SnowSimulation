@@ -150,7 +150,7 @@ bool Simulation::StepCUDA(float dt)
 	bool correct_dem = true;
 	bool sph_sph_correction = true;
 	bool compute_temperature = true;
-	bool change_phase = false;
+	bool change_phase = true;
 	//bool compute_wetness = false;
 	bool dem_friction = true;
 
