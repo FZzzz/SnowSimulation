@@ -42,7 +42,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	glm::vec3 fluid_origin = glm::vec3(0.f, 0.11f, 0.0f);
 	glm::vec3 snow_origin = glm::vec3(0.25f, 0.71f, 0.0f);
 	
-	const float sph_temperature = 0.3f;
+	const float sph_temperature = 50.f;
 	const float dem_temperature = -3.f;
 
 	m_particle_system->setHottestTemperature(sph_temperature + 0.1f * glm::abs(sph_temperature));
@@ -152,7 +152,7 @@ bool Simulation::StepCUDA(float dt)
 	bool compute_temperature = true;
 	bool change_phase = true;
 	//bool compute_wetness = false;
-	bool dem_friction = true;
+	bool dem_friction = false;
 
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 
@@ -308,7 +308,7 @@ void Simulation::setClipLength(int length)
 void Simulation::SetupSimParams()
 {
 	//const size_t n_particles = 1000;
-	const float particle_mass = 0.015f;
+	const float particle_mass = 0.5f;
 	const float n_kernel_particles = 20.f;	
 	const float dem_sph_ratio = 1.0f;
 	// water density = 1000 kg/m^3
@@ -351,7 +351,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->static_friction = 0.9f;
 	m_sim_params->kinematic_friction = 0.75f;
 
-	m_sim_params->scorr_coeff = 0.1f;
+	m_sim_params->scorr_coeff = 0.0f;
 	m_sim_params->sor_coeff = 1.0f * (1.f/4.f);
 	m_sim_params->viscosity = 0.01f;
 

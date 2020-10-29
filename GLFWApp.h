@@ -50,6 +50,8 @@ public:
 	float m_mouse_last_y;
 	bool m_mouse_pressed;
 
+	unsigned int m_frame_count;
+
 private:
 	
 	void Render();
@@ -82,6 +84,7 @@ private:
 	std::shared_ptr<Simulation> m_simulator;
 	std::shared_ptr<ParticleSystem> m_particle_system;
 
+	
 
 	/*GUIs*/
 	//void Frame_Status_GUI();

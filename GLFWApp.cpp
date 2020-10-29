@@ -38,7 +38,8 @@ GLFWApp::GLFWApp() :
 	m_gui_manager(nullptr),
 	m_mainCamera(nullptr),
 	m_renderer(nullptr),
-	m_mouse_pressed(false)
+	m_mouse_pressed(false),
+	m_frame_count(0)
 {
 }
 
@@ -223,7 +224,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 
 	// Simulation control settings
 	{
-		uint32_t iterations = 1;
+		uint32_t iterations = 10;
 		int clip_length = 200000;
 		m_simulator->SetSolverIteration(iterations);
 		m_simulator->setClipLength(clip_length);
@@ -444,6 +445,11 @@ void GLFWApp::Update()
 
 	// GUI update
 	m_gui_manager->Update();
+
+	if(!m_simulator->isPause())
+		m_frame_count++;
+
+	if (m_frame_count == 2500) m_simulator->Pause();
 }
 
 void GLFWApp::SetUpImGui()
@@ -466,17 +472,18 @@ void Frame_Status_GUI()
 	ImGui::Begin("Frame Status");
 	static float f = 0.0f;
 	static int counter = 0;
+	ImGui::Text("Frame: %u", GLFWApp::getInstance()->m_frame_count);
 	ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	ImGui::NewLine();
-	ImGui::Text("Object Array Size: %u", resource_manager->getObjects().size());
-	ImGui::Text("Mesh Array Size: %u", resource_manager->getMeshes().size());
-	ImGui::Text("Shader Array Size: %u", resource_manager->getShaders().size());
+	//ImGui::Text("Object Array Size: %u", resource_manager->getObjects().size());
+	//ImGui::Text("Mesh Array Size: %u", resource_manager->getMeshes().size());
+	//ImGui::Text("Shader Array Size: %u", resource_manager->getShaders().size());
 	//ImGui::Text("IMGUI time: %.2lf ms", (t0-t4).count()/1000000.0);
 	//ImGui::Text("Update time: %.2lf ms", (t2-t1).count()/1000000.0);
 	//ImGui::Text("Render time: %.2lf ms", (t3-t2).count()/1000000.0);
 	//ImGui::Text("SWAP & PollEvent time: %.2lf ms", (t4-t3).count()/1000000.0);
 
-	ImGui::Text("Camera Position: %.2f, %.2f, %.2f", camera->m_position.x, camera->m_position.y, camera->m_position.z);
+	//ImGui::Text("Camera Position: %.2f, %.2f, %.2f", camera->m_position.x, camera->m_position.y, camera->m_position.z);
 
 	ImGui::End();
 }
