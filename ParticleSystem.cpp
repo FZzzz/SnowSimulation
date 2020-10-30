@@ -223,7 +223,10 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float)
 		);
 
-
+		cudaMalloc(
+			(void**)&(m_sph_particles->m_device_data.m_d_mass_scale),
+			n * sizeof(float)
+		);
 
 		// Set value
 		cudaMemcpy(
@@ -301,6 +304,14 @@ void ParticleSystem::SetupCUDAMemory()
 			m_sph_particles->m_size * sizeof(float),
 			cudaMemcpyHostToDevice
 		);
+
+		cudaMemcpy(
+		(void*)m_sph_particles->m_device_data.m_d_mass_scale,
+			(void*)contrib.data(),
+			n * sizeof(float),
+			cudaMemcpyHostToDevice
+		);
+
 
 		cuda_tool_fill_uint(m_sph_particles->m_device_data.m_d_predicate, 0, m_sph_particles->m_size, 1u);
 		cuda_tool_fill_uint(m_sph_particles->m_device_data.m_d_predicate, m_sph_particles->m_size, m_sph_particles->m_full_size, 0u);
@@ -395,6 +406,12 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float)
 		);
 
+		cudaMalloc(
+			(void**)&(m_dem_particles->m_device_data.m_d_mass_scale),
+			n * sizeof(float)
+		);
+
+
 		// Set value
 		cudaMemcpy(
 		(void*)m_dem_particles->m_device_data.m_d_predict_positions,
@@ -472,6 +489,14 @@ void ParticleSystem::SetupCUDAMemory()
 			cudaMemcpyHostToDevice
 		);
 
+		cudaMemcpy(
+			(void*)m_dem_particles->m_device_data.m_d_mass_scale,
+			(void*)contrib.data(),
+			n * sizeof(float),
+			cudaMemcpyHostToDevice
+			);
+
+
 		cuda_tool_fill_uint(m_dem_particles->m_device_data.m_d_predicate, 0, m_dem_particles->m_size, 1u);
 		cuda_tool_fill_uint(m_dem_particles->m_device_data.m_d_predicate, m_dem_particles->m_size, m_dem_particles->m_full_size, 0u);
 		cuda_tool_fill_uint(m_dem_particles->m_device_data.m_d_scan_index, 0, m_dem_particles->m_full_size, 0u);
@@ -528,6 +553,11 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float)
 		);
 
+		cudaMalloc(
+		(void**)&(m_boundary_particles->m_device_data.m_d_mass_scale),
+			n * sizeof(float)
+			);
+
 		// Copy data
 		cudaMemcpy(
 			(void*)m_boundary_particles->m_device_data.m_d_mass,
@@ -572,6 +602,14 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 		);
+
+		cudaMemcpy(
+		(void*)m_boundary_particles->m_device_data.m_d_mass_scale,
+			(void*)contrib.data(),
+			n * sizeof(float),
+			cudaMemcpyHostToDevice
+			);
+
 
 	}// end of boundary particle settings
 
@@ -657,6 +695,11 @@ void ParticleSystem::SetupCUDAMemory()
 			(void**)&(m_buffer_device_data->m_d_contrib),
 			n * sizeof(float)
 		);
+
+		cudaMalloc(
+			(void**)&(m_buffer_device_data->m_d_mass_scale),
+			n * sizeof(float)
+			);
 	}
 
 }

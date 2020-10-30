@@ -34,6 +34,9 @@ struct ParticleDeviceData
 	/*blending contribution*/
 	float* m_d_contrib;
 
+	/*scaling factor for shock propagation*/
+	float* m_d_mass_scale;
+
 	uint*  m_d_predicate;
 	uint*  m_d_scan_index;
 	uint*  m_d_new_end;

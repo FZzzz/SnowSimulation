@@ -470,28 +470,28 @@ void integrate_pbd_cd_d(
 	float3 t_pos = pos[index] + dt * t_vel;
 
 	
-	if (t_pos.x >= 1.0f)
+	if (t_pos.x + params.particle_radius >= 1.0f)
 	{
 		t_pos.x = 1.f;
 		t_vel.x =  -abs(t_vel.x);
 		t_vel *= params.boundary_damping;
 	}
 
-	if (t_pos.x <= -1.0f)
+	if (t_pos.x - params.particle_radius <= -1.0f)
 	{
 		t_pos.x = -1.f;
 		t_vel.x = abs(t_vel.x);
 		t_vel *= params.boundary_damping;
 	}
 
-	if (t_pos.z >= 1.0f)
+	if (t_pos.z + params.particle_radius >= 1.0f)
 	{
 		t_pos.z = 1.f;
 		t_vel.z = -abs(t_vel.z);
 		t_vel *= params.boundary_damping;
 	}
 
-	if (t_pos.z <= -1.0f)
+	if (t_pos.z - params.particle_radius <= -1.0f)
 	{
 		t_pos.z = -1.f;
 		t_vel.z = abs(t_vel.z);
@@ -499,22 +499,23 @@ void integrate_pbd_cd_d(
 	}
 	
 	
-	if (pos[index].y <= 0.f + params.particle_radius)
+	if (pos[index].y - params.particle_radius <= 0.f )
 	{
-		pos[index].y = 0.f;
+		pos[index].y = params.particle_radius;
 		t_vel.y = abs(t_vel.y);
 		t_vel *= params.boundary_damping;
 	}
 	
 
 	// Velocity limitation
+	const float max_limit = params.maximum_speed;
 	
-	const float limit = params.maximum_speed;
-	if (length(t_vel) > limit)
+	if (length(t_vel) > max_limit)
 	{
-		t_vel = (limit / length(t_vel)) * t_vel ;
+		//printf("%u: vel: %f T: %f contrib: %f\n", index, length(t_vel),data.m_d_T[index] , data.m_d_contrib[index]);
+		t_vel = (max_limit / length(t_vel)) * t_vel;
+		
 	}
-	
 
 	predict_pos[index] = pos[index] + dt * t_vel;
 	vel[index] = t_vel;
@@ -1388,12 +1389,10 @@ void finalize_correction(
 
 	//float3 res = new_pos[index];
 	//float3 vel = (res - pos[index]) / dt;
-
+	float3 diff = new_pos[index] - pos[index];
 	float3 t_pos = new_pos[index];
-	float3 t_vel = (t_pos - pos[index]) / dt;
+	float3 t_vel = (length(diff) >= params.minimum_speed) ? (diff) / dt : make_float3(0);
 	
-	
-
 	velocity[index] = t_vel;
 	//predict_pos[index] = t_pos;
 	pos[index] = t_pos;
@@ -1497,7 +1496,7 @@ float3 pbd_distance_correction_contrib(
 				float dist = length(v);
 
 				// correct if distance is close
-				if (dist <= 2.f * params.particle_radius)
+				if (dist < 2.f * params.particle_radius)
 				{
 					// Non-penetration correction
 					const float w1 = invMass[original_index_j];
@@ -1556,7 +1555,7 @@ float3 pbd_distance_correction(
 				float dist = length(v);
 
 				// correct if distance is close
-				if (dist <= 2.f * params.particle_radius)
+				if (dist < 2.f * params.particle_radius)
 				{
 					// Non-penetration correction
 					const float w1 = invMass[original_index_j];
@@ -1618,7 +1617,7 @@ float3 pbd_sph_sph_distance_correction(
 					float dist = length(v);
 
 					// correct if distance is close
-					if (dist <= 2.f * params.particle_radius)
+					if (dist < 2.f * params.particle_radius)
 					{
 						// Non-penetration correction
 						const float w1 = invMass[original_index_j];
@@ -1678,7 +1677,7 @@ float3 pbd_distance_correction_coupling_contrib(
 			float dist = length(v);
 
 			// correct if distance is close
-			if (dist <= 2.f * params.particle_radius)
+			if (dist < 2.f * params.particle_radius)
 			{
 				// Non-penetration correction
 				const float w1 = other_invMass[original_index_j];
@@ -1690,7 +1689,7 @@ float3 pbd_distance_correction_coupling_contrib(
 				float3 n = v / (dist + params.pbd_epsilon);// +0.000001f);
 
 				correction_j = -w0 * (1.f / w_sum) * C * n;
-				correction_j *= other_contrib[original_index_j];
+				//correction_j *= other_contrib[original_index_j];
 			}
 
 			correction += correction_j;
@@ -1737,7 +1736,7 @@ float3 pbd_distance_correction_boundary(
 			float dist = length(v);
 
 			// correct if distance is close
-			if (dist <= 2.f * params.particle_radius)
+			if (dist < 2.f * params.particle_radius)
 			{
 				// Non-penetration correction
 				const float w1 = b_invMass[original_index_j];
@@ -3183,22 +3182,23 @@ inline void compute_snow_distance_correction(
 	uint dem_num_threads, dem_num_blocks;
 	compute_grid_size(dem_num_particles, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
 	
-	// sph-dem distance correction (treat sph particles as dem particles)
-	compute_sph_dem_distance_correction << <sph_num_blocks, sph_num_threads >> > (
-		sph_particles->m_device_data.m_d_correction,
-		sph_particles->m_device_data.m_d_massInv,
-		//sph_particles->m_device_data.m_d_contrib,
-		dem_particles->m_device_data.m_d_massInv,
-		dem_particles->m_device_data.m_d_contrib,
-		sph_cell_data,
-		dem_cell_data,
-		sph_num_particles
-	);
-	getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
-	
+
 	if (correct_dem)
 	{
-		//dem-sph distance correction (reversed parameters for the same function)
+		// correct sph particles with dem particles by distance constraint
+		compute_sph_dem_distance_correction << <sph_num_blocks, sph_num_threads >> > (
+			sph_particles->m_device_data.m_d_correction,
+			sph_particles->m_device_data.m_d_massInv,
+			//sph_particles->m_device_data.m_d_contrib,
+			dem_particles->m_device_data.m_d_massInv,
+			dem_particles->m_device_data.m_d_contrib,
+			sph_cell_data,
+			dem_cell_data,
+			sph_num_particles
+			);
+		getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
+
+		// correct dem particles with sph particles by distance constraint
 		compute_sph_dem_distance_correction << <dem_num_blocks, dem_num_threads >> > (
 			dem_particles->m_device_data.m_d_correction,
 			dem_particles->m_device_data.m_d_massInv,
@@ -3839,13 +3839,13 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	copy_to_target <<<num_blocks, num_threads>>> (sph_particles->m_device_data, buffer, sph_particles->m_size);
 	scatter <<<num_blocks, num_threads >>> (sph_particles->m_device_data, buffer, sph_particles->m_size);
 	getLastCudaError("Kernel execution failed: scatter ");
-
+	cudaDeviceSynchronize();
 	// copy dem to tmp
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
 	copy_to_target <<<num_blocks, num_threads >>> (dem_particles->m_device_data, buffer, dem_particles->m_size);
 	scatter <<< num_blocks, num_threads >>> (dem_particles->m_device_data, buffer, dem_particles->m_size);
 	getLastCudaError("Kernel execution failed: scatter ");
-
+	cudaDeviceSynchronize();
 	// reset size on CPU for draw call
 	sph_particles->setSize(sph_new_size);
 	dem_particles->setSize(dem_new_size);
@@ -3853,8 +3853,9 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	// copy data to GPU so that we can know how much particles are simulating now
 	cudaMemcpy(sph_particles->m_device_data.m_d_new_end, &sph_new_size, sizeof(uint), cudaMemcpyHostToDevice);
 	cudaMemcpy(dem_particles->m_device_data.m_d_new_end, &dem_new_size, sizeof(uint), cudaMemcpyHostToDevice);
-
-	uint sph_tail_size = full_size - sph_new_size, dem_tail_size = full_size - dem_new_size;
+	cudaDeviceSynchronize();
+	// clean
+	//uint sph_tail_size = full_size - sph_new_size, dem_tail_size = full_size - dem_new_size;
 	
 	thrust::fill(sph_predicate_ptr, sph_predicate_ptr + sph_new_size, 1u);
 	thrust::fill(sph_predicate_ptr + sph_new_size, sph_predicate_ptr + full_size, 0u);
@@ -3892,8 +3893,16 @@ void phase_change(
 
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
 	melting<<<num_blocks, num_threads>>>(sph_particles->m_device_data, dem_particles->m_device_data, dem_particles->m_size);
-	
+	cudaDeviceSynchronize();
 	compact_and_clean(sph_particles, dem_particles, buffer);
+}
+
+void compute_mass_scale_factor(
+	ParticleSet* sph_particles,
+	ParticleSet* dem_particles,
+	ParticleSet* b_particles
+)
+{
 }
 
 
@@ -3985,7 +3994,7 @@ void snow_simulation(
 			sph_cell_data,
 			sph_particles->m_size
 		);
-		/*
+		
 		compute_snow_pbf_density(
 			sph_particles,
 			dem_particles,
@@ -4022,7 +4031,7 @@ void snow_simulation(
 			boundary_particles->m_size,
 			dt
 			);
-		*/
+		
 		compute_snow_distance_correction(
 			sph_particles,
 			dem_particles,
@@ -4123,4 +4132,14 @@ void snow_simulation(
 		dem_cell_data,
 		sph_particles->m_size
 	);
+
+	apply_XSPH_viscosity(
+		dem_particles,
+		sph_particles,
+		dem_cell_data,
+		sph_cell_data,
+		dem_particles->m_size
+	);
+
+
 }

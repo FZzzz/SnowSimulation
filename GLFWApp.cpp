@@ -52,15 +52,18 @@ GLFWApp::~GLFWApp()
 
 bool GLFWApp::Initialize(int width , int height , const std::string &title)
 {
-	const float f_width = static_cast<float>(width);
-	const float f_height = static_cast<float>(height);
-
+	
 	srand(time(NULL));
 
 	if (!glfwInit())
 	{
 		return false;
 	}
+
+	const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+
+	const float f_width = 0.8f * static_cast<float>(mode->width);
+	const float f_height = 0.8f * static_cast<float>(mode->height);
 
 	glfwSetErrorCallback(Error_callback);
 	glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
@@ -69,7 +72,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	glfwWindowHint(GLFW_SAMPLES, 4);
 
 	/* Setting GLFW window */
-	m_window = glfwCreateWindow(width, height, title.c_str() , NULL , NULL);
+	m_window = glfwCreateWindow((int)f_width, (int)f_height, title.c_str() , NULL , NULL);
 	
 	if (!m_window)
 	{
@@ -160,7 +163,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 
 		//Renderer setting
 		m_renderer = std::make_shared<Renderer>();
-		m_renderer->Initialize(m_resource_manager, m_particle_system, m_mainCamera, width, height);
+		m_renderer->Initialize(m_resource_manager, m_particle_system, m_mainCamera, (int)f_width, (int)f_height);
 	}
 	
 	// Load Meshes
@@ -409,8 +412,8 @@ void Mouse_scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
 	auto camera = GLFWApp::getInstance()->getMainCamera();
 
-	camera->Zoom(-0.1f * yoffset);
-	//camera->MoveForward(-0.1f * yoffset);
+	//camera->Zoom(-0.1f * yoffset);
+	camera->MoveForward(0.1f * yoffset);
 }
 
 void GLFWApp::Render()

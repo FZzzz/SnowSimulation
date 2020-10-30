@@ -9,6 +9,7 @@ struct SimParams
 	float3 gravity;
 	float  global_damping;
 	float  maximum_speed;
+	float  minimum_speed;
 
 	// pbf sph coeffcients
 	float  epsilon;

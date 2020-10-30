@@ -50,50 +50,6 @@ void compute_boundary_volume(
     uint numParticles
 );
 
-void solve_sph_fluid(
-    ParticleSet*    sph_particles,
-    CellData		sph_cell_data,
-    uint			numParticles,
-    ParticleSet*    boundary_particles,
-    CellData		b_cell_data,
-    uint			b_num_particles,
-    float			dt,
-    int             iterations=1
-);
-
-void solve_pbd_dem(
-    ParticleSet* dem_particles,
-    ParticleSet* boundary_particles,
-    CellData     cell_data,
-    CellData     b_cell_data,
-    uint         numParticles,
-    uint         b_numParticles,
-    float        dt,
-    int          iteration
-);
-
-/* solve dem particle as sph particles */
-void solve_dem_sph(
-    ParticleSet* dem_particles,
-    ParticleSet* sph_particles,
-    CellData     sph_cell_data,
-    CellData     dem_cell_data,
-    uint         num_dem_particles,
-    uint         num_sph_particles,
-    float        dt
-);
-
-/* solve sph particles as dem particles */
-void solve_sph_dem(
-    ParticleSet* sph_particles,
-    ParticleSet* dem_particles,
-    CellData     sph_cell_data,
-    CellData     dem_cell_data,
-    uint         num_sph_particles,
-    uint         num_dem_particles,
-    float        dt
-);
-
 void snow_simulation(
     ParticleSet* sph_particles,
     ParticleSet* dem_particles,
@@ -104,7 +60,7 @@ void snow_simulation(
     CellData     b_cell_data,
     float        dt,
     int          iterations,
-    bool         correct_dem,
+    bool         sph_dem_correction,
     bool         sph_sph_correction,
     bool         dem_friction,
     bool         compute_temperature,
