@@ -412,8 +412,8 @@ void Mouse_scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
 	auto camera = GLFWApp::getInstance()->getMainCamera();
 
-	//camera->Zoom(-0.1f * yoffset);
-	camera->MoveForward(0.1f * yoffset);
+	camera->Zoom(-0.1f * yoffset);
+	//camera->MoveForward(0.1f * yoffset);
 }
 
 void GLFWApp::Render()
@@ -451,8 +451,6 @@ void GLFWApp::Update()
 
 	if(!m_simulator->isPause())
 		m_frame_count++;
-
-	if (m_frame_count == 2500) m_simulator->Pause();
 }
 
 void GLFWApp::SetUpImGui()

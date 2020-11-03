@@ -154,6 +154,7 @@ bool Simulation::StepCUDA(float dt)
 	bool change_phase = true;
 	//bool compute_wetness = false;
 	bool dem_friction = false;
+	bool dem_viscosity = false;
 
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 
@@ -207,6 +208,7 @@ bool Simulation::StepCUDA(float dt)
 		dem_friction,
 		compute_temperature,
 		change_phase,
+		dem_viscosity,
 		cd_on
 		);
 
@@ -309,7 +311,7 @@ void Simulation::setClipLength(int length)
 void Simulation::SetupSimParams()
 {
 	//const size_t n_particles = 1000;
-	const float particle_mass = 0.015f;
+	const float particle_mass = 0.05f;
 	const float n_kernel_particles = 20.f;	
 	const float dem_sph_ratio = 1.f;
 	// water density = 1000 kg/m^3

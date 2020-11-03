@@ -469,7 +469,6 @@ void integrate_pbd_cd_d(
 	t_vel = t_vel * params.global_damping;
 	float3 t_pos = pos[index] + dt * t_vel;
 
-	
 	if (t_pos.x + params.particle_radius >= 1.0f)
 	{
 		t_pos.x = 1.f;
@@ -498,7 +497,6 @@ void integrate_pbd_cd_d(
 		t_vel *= params.boundary_damping;
 	}
 	
-	
 	if (pos[index].y - params.particle_radius <= 0.f )
 	{
 		pos[index].y = params.particle_radius;
@@ -512,7 +510,7 @@ void integrate_pbd_cd_d(
 	
 	if (length(t_vel) > max_limit)
 	{
-		//printf("%u: vel: %f T: %f contrib: %f\n", index, length(t_vel),data.m_d_T[index] , data.m_d_contrib[index]);
+		//printf("%u: pos: %f, %f, %f vel: %f T: %f contrib: %f density: %f C:%f lambda: %f\n", index, pos[index].x, pos[index].y, pos[index].z, length(t_vel),data.m_d_T[index] , data.m_d_contrib[index], data.m_d_density[index], data.m_d_C[index], data.m_d_lambda[index]);
 		t_vel = (max_limit / length(t_vel)) * t_vel;
 		
 	}
@@ -1368,7 +1366,7 @@ void apply_correction(
 	new_pos[original_index] = cell_data.sorted_pos[index] + params.sor_coeff * correction[original_index];
 	predict_pos[original_index] = new_pos[original_index];
 	// write back to sorted_pos for next iteration
-	//cell_data.sorted_pos[index] = new_pos[original_index];
+	//cell_data.sorted_pos[index] = new_pos[original_index]; // disabled (since every step the sorted pos will be filled with different value)
 	correction[original_index] = make_float3(0, 0, 0);
 }
 
@@ -3690,7 +3688,7 @@ void transfer_heat(
 
 
 // copy data0[index] to data1[target_index]
-inline __device__
+ __device__
 void copy_particle_info(ParticleDeviceData src, ParticleDeviceData dst, uint index, uint target_index)
 {
 	dst.m_d_positions[target_index] = src.m_d_positions[index];
@@ -3731,6 +3729,22 @@ void clean_particle_info(ParticleDeviceData dst, uint target_index)
 }
 */
 
+__device__
+void print_particle_info(ParticleDeviceData data, uint index, const char* str)
+{
+	printf("%s\n%u: pos: %f, %f, %f vel: %f corr: %f, %f, %f T: %f density: %f C:%f lambda: %f\n", 
+		str,
+		index, 
+		data.m_d_positions[index].x, data.m_d_positions[index].y, data.m_d_positions[index].z, 
+		data.m_d_velocity[index],
+		data.m_d_correction[index].x, data.m_d_correction[index].y, data.m_d_correction[index].z,
+		data.m_d_T[index], 
+		data.m_d_density[index], 
+		data.m_d_C[index], 
+		data.m_d_lambda[index]
+	);
+}
+
 __global__
 void melting(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_particles)
 {
@@ -3743,10 +3757,17 @@ void melting(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_
 	if (dem_data.m_d_T[index] > params.freezing_point)
 	{
 		uint target_index;
-		target_index = atomicAdd(sph_data.m_d_new_end, 1);
+		target_index = atomicAdd(sph_data.m_d_new_end, 1u);
 		
 		dem_data.m_d_contrib[index] = 0;
+
+		printf("%u to %u\n", index, target_index);
+		print_particle_info(dem_data, index, "DEM(Before)");
+		print_particle_info(sph_data, target_index, "SPH");
 		copy_particle_info(dem_data, sph_data, index, target_index);
+		print_particle_info(dem_data, index, "DEM(After)");
+		print_particle_info(sph_data, target_index, "SPH");
+
 
 		dem_data.m_d_predicate[index] = 0;
 		sph_data.m_d_predicate[target_index] = 1;
@@ -3765,7 +3786,7 @@ void freezing(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num
 	if (sph_data.m_d_T[index] <= params.freezing_point)
 	{
 		uint target_index;
-		target_index = atomicAdd(dem_data.m_d_new_end, 1);
+		target_index = atomicAdd(dem_data.m_d_new_end, 1u);
 		//printf("target_index: %u\n", target_index);
 		sph_data.m_d_contrib[index] = 0;
 		copy_particle_info(sph_data, dem_data, index, target_index);
@@ -3818,6 +3839,7 @@ void clean_tail(ParticleDeviceData data, uint num_particles)
 */
 void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, ParticleDeviceData buffer)
 {
+	static uint count=0, sph_size=0, dem_size=0;
 	uint num_threads, num_blocks;
 	uint sph_new_size, dem_new_size;
 	uint full_size = sph_particles->m_full_size;
@@ -3849,6 +3871,10 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	// reset size on CPU for draw call
 	sph_particles->setSize(sph_new_size);
 	dem_particles->setSize(dem_new_size);
+	if(sph_size != sph_particles->m_size)
+		printf("(%u)New SPH size: %u\n", count, sph_particles->m_size), sph_size = sph_particles->m_size;
+	if(dem_size != dem_particles->m_size)
+		printf("(%u)New DEM size: %u\n", count, dem_particles->m_size), dem_size = dem_particles->m_size, count++;
 
 	// copy data to GPU so that we can know how much particles are simulating now
 	cudaMemcpy(sph_particles->m_device_data.m_d_new_end, &sph_new_size, sizeof(uint), cudaMemcpyHostToDevice);
@@ -3922,6 +3948,7 @@ void snow_simulation(
 	bool dem_friction,
 	bool compute_temperature,
 	bool change_phase,
+	bool dem_viscosity,
 	bool cd_on
 )
 {
@@ -4132,14 +4159,17 @@ void snow_simulation(
 		dem_cell_data,
 		sph_particles->m_size
 	);
-
-	apply_XSPH_viscosity(
-		dem_particles,
-		sph_particles,
-		dem_cell_data,
-		sph_cell_data,
-		dem_particles->m_size
-	);
+	
+	if (dem_viscosity)
+	{
+		apply_XSPH_viscosity(
+			dem_particles,
+			sph_particles,
+			dem_cell_data,
+			sph_cell_data,
+			dem_particles->m_size
+		);
+	}
 
 
 }
