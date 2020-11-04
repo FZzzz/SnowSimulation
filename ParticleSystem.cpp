@@ -132,6 +132,7 @@ void ParticleSystem::setParticleRadius(float point_radius)
 
 void ParticleSystem::SetupCUDAMemory()
 {
+	uint id_count = 1;
 	// Fluid paritcles
 	{
 		size_t n = m_sph_particles->m_full_size;
@@ -228,6 +229,12 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float)
 		);
 
+		cudaMalloc(
+			(void**)&(m_sph_particles->m_device_data.m_d_trackId),
+			n * sizeof(uint)
+		);
+
+
 		// Set value
 		cudaMemcpy(
 		(void*)m_sph_particles->m_device_data.m_d_predict_positions,
@@ -312,6 +319,15 @@ void ParticleSystem::SetupCUDAMemory()
 			cudaMemcpyHostToDevice
 		);
 
+		std::vector<uint> id_vec(n, 0u);
+		for (uint i = 0; i < m_sph_particles->m_size; ++i) id_vec[i] = id_count, id_count++;
+		cudaMemcpy(
+			(void*)m_sph_particles->m_device_data.m_d_trackId,
+			(void*)id_vec.data(),
+			n * sizeof(uint),
+			cudaMemcpyHostToDevice
+		);
+		//cudaMemset((void*)m_sph_particles->m_device_data.m_d_trackId, 0, n);
 
 		cuda_tool_fill_uint(m_sph_particles->m_device_data.m_d_predicate, 0, m_sph_particles->m_size, 1u);
 		cuda_tool_fill_uint(m_sph_particles->m_device_data.m_d_predicate, m_sph_particles->m_size, m_sph_particles->m_full_size, 0u);
@@ -411,6 +427,10 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float)
 		);
 
+		cudaMalloc(
+			(void**)&(m_dem_particles->m_device_data.m_d_trackId),
+			n * sizeof(float)
+		);
 
 		// Set value
 		cudaMemcpy(
@@ -496,6 +516,14 @@ void ParticleSystem::SetupCUDAMemory()
 			cudaMemcpyHostToDevice
 			);
 
+		std::vector<uint> id_vec(n, 0u);
+		for (uint i = 0; i < m_dem_particles->m_size; ++i) id_vec[i] = id_count, id_count++;
+		cudaMemcpy(
+			(void*)m_dem_particles->m_device_data.m_d_trackId,
+			(void*)id_vec.data(),
+			n * sizeof(uint),
+			cudaMemcpyHostToDevice
+		);
 
 		cuda_tool_fill_uint(m_dem_particles->m_device_data.m_d_predicate, 0, m_dem_particles->m_size, 1u);
 		cuda_tool_fill_uint(m_dem_particles->m_device_data.m_d_predicate, m_dem_particles->m_size, m_dem_particles->m_full_size, 0u);
@@ -700,6 +728,11 @@ void ParticleSystem::SetupCUDAMemory()
 			(void**)&(m_buffer_device_data->m_d_mass_scale),
 			n * sizeof(float)
 			);
+		
+		cudaMalloc(
+			(void**)&(m_buffer_device_data->m_d_trackId),
+			n * sizeof(uint)
+		);
 	}
 
 }

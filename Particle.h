@@ -40,6 +40,8 @@ struct ParticleDeviceData
 	uint*  m_d_predicate;
 	uint*  m_d_scan_index;
 	uint*  m_d_new_end;
+
+	uint*  m_d_trackId;
 };
 
 class ParticleSet

@@ -5,6 +5,8 @@
 #include <device_atomic_functions.h>
 #include <helper_math.h>
 #include <stdio.h>
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
 #include <thrust/device_ptr.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -3705,9 +3707,10 @@ void copy_particle_info(ParticleDeviceData src, ParticleDeviceData dst, uint ind
 	dst.m_d_lambda[target_index] = src.m_d_lambda[index];
 	dst.m_d_T[target_index] = src.m_d_T[index];
 	dst.m_d_new_T[target_index] = src.m_d_new_T[index];
+	dst.m_d_trackId[target_index] = src.m_d_trackId[index];
 	//dst.m_d_predicate[target_index] = 1;  //set predicate to 1 so that exclusive scan work correctly
 }
-/*
+
 inline __device__
 void clean_particle_info(ParticleDeviceData dst, uint target_index)
 {
@@ -3725,9 +3728,10 @@ void clean_particle_info(ParticleDeviceData dst, uint target_index)
 	dst.m_d_T[target_index] = INFINITY;
 	dst.m_d_new_T[target_index] = INFINITY;
 	dst.m_d_predicate[target_index] = 0;
+	dst.m_d_trackId[target_index] = 0;
 	dst.m_d_scan_index[target_index] = 0; // <- maybe this doesn't need to update
 }
-*/
+
 
 __device__
 void print_particle_info(ParticleDeviceData data, uint index, const char* str)
@@ -3762,14 +3766,15 @@ void melting(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_
 		dem_data.m_d_contrib[index] = 0;
 
 		printf("%u to %u\n", index, target_index);
-		print_particle_info(dem_data, index, "DEM(Before)");
-		print_particle_info(sph_data, target_index, "SPH");
+		//print_particle_info(dem_data, index, "DEM(Before)");
+		//print_particle_info(sph_data, target_index, "SPH");
 		copy_particle_info(dem_data, sph_data, index, target_index);
-		print_particle_info(dem_data, index, "DEM(After)");
-		print_particle_info(sph_data, target_index, "SPH");
-
+		//print_particle_info(dem_data, index, "DEM(After)");
+		//print_particle_info(sph_data, target_index, "SPH");
 
 		dem_data.m_d_predicate[index] = 0;
+		//set track id to 0 => not using
+		dem_data.m_d_trackId[index] = 0; 
 		sph_data.m_d_predicate[target_index] = 1;
 	}
 }
@@ -3823,7 +3828,7 @@ void scatter(ParticleDeviceData target_data, ParticleDeviceData buffer, uint num
 		copy_particle_info(buffer, target_data, index, target_index);
 	}
 }
-/*
+
 __global__
 void clean_tail(ParticleDeviceData data, uint num_particles)
 {
@@ -3836,7 +3841,78 @@ void clean_tail(ParticleDeviceData data, uint num_particles)
 	clean_particle_info(data, index);
 
 }
-*/
+
+template <typename T>
+void print_vec(std::vector<T> vec)
+{
+	for (auto it = vec.begin(); it != vec.end(); ++it)
+		std::cout << *it << " ";
+	std::cout << "\n";
+}
+
+void verification(ParticleSet* sph_particles, ParticleSet* dem_particles)
+{
+	if (sph_particles->m_full_size != dem_particles->m_full_size)
+		return;
+
+	uint ans_count = 0;
+	uint n = sph_particles->m_full_size;
+
+
+	std::vector<uint> sph_id_vec(n, 0u);
+	std::vector<uint> dem_id_vec(n, 0u);
+
+	// copy to host vector
+	cudaMemcpy(sph_id_vec.data(), sph_particles->m_device_data.m_d_trackId, n * sizeof(uint), cudaMemcpyDeviceToHost);
+	cudaMemcpy(dem_id_vec.data(), dem_particles->m_device_data.m_d_trackId, n * sizeof(uint), cudaMemcpyDeviceToHost);
+
+	thrust::device_ptr<uint> sph_id_ptr = thrust::device_pointer_cast(sph_particles->m_device_data.m_d_trackId);
+	thrust::device_ptr<uint> dem_id_ptr = thrust::device_pointer_cast(dem_particles->m_device_data.m_d_trackId);
+
+	// Is all ID unique?
+	for (uint i = 1; i <= n; ++i)
+	{
+		uint tmp = 0;
+		//printf("searching %u... ", i);
+		//search in host vector
+		for (auto it = sph_id_vec.cbegin(); it != sph_id_vec.cend(); ++it)
+		{
+			if (*it == i) 
+				ans_count++, tmp++;
+		}
+
+		for (auto it = dem_id_vec.cbegin(); it != dem_id_vec.cend(); ++it)
+		{
+			if (*it == i)
+				ans_count++, tmp++;
+		}
+		if (tmp > 1)
+			printf("\nExceed at %u", i);
+	}
+
+	if (ans_count == n)
+		printf("Verification success\n");
+	else if (ans_count > n)
+	{
+		printf("Verification failed (exceed) n=%u, ans_count=%u\n", n, ans_count);
+		printf("SPH ");
+		print_vec(sph_id_vec);
+		printf("DEM ");
+		print_vec(dem_id_vec);
+	}
+	else if (ans_count < n)
+	{
+		printf("Verification failed (less) n=%u, ans_count=%u\n", n, ans_count);
+		printf("SPH ");
+		print_vec(sph_id_vec);
+		printf("DEM ");
+		print_vec(dem_id_vec);
+	}
+
+
+}
+
+
 void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, ParticleDeviceData buffer)
 {
 	static uint count=0, sph_size=0, dem_size=0;
@@ -3856,6 +3932,9 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	thrust::exclusive_scan(sph_predicate_ptr, sph_predicate_ptr + full_size, sph_scan_ptr, 0u);
 	thrust::exclusive_scan(dem_predicate_ptr, dem_predicate_ptr + full_size, dem_scan_ptr, 0u);
 
+	if (dem_size != dem_particles->m_size)
+		printf("Before verification \n");  verification(sph_particles, dem_particles);
+
 	// copy sph to tmp
 	compute_grid_size(sph_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
 	copy_to_target <<<num_blocks, num_threads>>> (sph_particles->m_device_data, buffer, sph_particles->m_size);
@@ -3871,24 +3950,22 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	// reset size on CPU for draw call
 	sph_particles->setSize(sph_new_size);
 	dem_particles->setSize(dem_new_size);
-	if(sph_size != sph_particles->m_size)
-		printf("(%u)New SPH size: %u\n", count, sph_particles->m_size), sph_size = sph_particles->m_size;
-	if(dem_size != dem_particles->m_size)
-		printf("(%u)New DEM size: %u\n", count, dem_particles->m_size), dem_size = dem_particles->m_size, count++;
-
+	
 	// copy data to GPU so that we can know how much particles are simulating now
 	cudaMemcpy(sph_particles->m_device_data.m_d_new_end, &sph_new_size, sizeof(uint), cudaMemcpyHostToDevice);
 	cudaMemcpy(dem_particles->m_device_data.m_d_new_end, &dem_new_size, sizeof(uint), cudaMemcpyHostToDevice);
 	cudaDeviceSynchronize();
 	// clean
-	//uint sph_tail_size = full_size - sph_new_size, dem_tail_size = full_size - dem_new_size;
 	
+	/*
 	thrust::fill(sph_predicate_ptr, sph_predicate_ptr + sph_new_size, 1u);
 	thrust::fill(sph_predicate_ptr + sph_new_size, sph_predicate_ptr + full_size, 0u);
 
 	thrust::fill(dem_predicate_ptr, dem_predicate_ptr + dem_new_size, 1u);
 	thrust::fill(dem_predicate_ptr + dem_new_size, dem_predicate_ptr + full_size, 0u);
-	/*
+	*/
+	
+	uint sph_tail_size = full_size - sph_new_size, dem_tail_size = full_size - dem_new_size;
 	compute_grid_size(sph_tail_size, MAX_THREAD_NUM, num_blocks, num_threads);
 	clean_tail <<<num_blocks, num_threads>>> (sph_particles->m_device_data, sph_tail_size);
 	getLastCudaError("Kernel execution failed: clean_tail ");
@@ -3896,7 +3973,13 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	compute_grid_size(dem_tail_size, MAX_THREAD_NUM, num_blocks, num_threads);
 	clean_tail <<<num_blocks, num_threads>>> (dem_particles->m_device_data, dem_tail_size);
 	getLastCudaError("Kernel execution failed: clean_tail ");
-	*/
+
+	if (sph_size != sph_particles->m_size)
+		printf("(%u)New SPH size: %u\n", count, sph_particles->m_size), sph_size = sph_particles->m_size;
+	if (dem_size != dem_particles->m_size)
+		printf("(%u)New DEM size: %u\n After verification\n", count, dem_particles->m_size), dem_size = dem_particles->m_size, count++, verification(sph_particles, dem_particles);
+
+	
 }
 
 void phase_change(
