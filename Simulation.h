@@ -106,6 +106,7 @@ private:
 	uint32_t m_iterations;
 	int m_clip_length; // clip length of how many frames at the each run
 	
+	float m_dt;
 
 };
 

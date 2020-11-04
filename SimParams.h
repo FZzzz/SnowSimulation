@@ -19,6 +19,7 @@ struct SimParams
 	float  particle_radius;
 	float  rest_density;
 	float  scorr_coeff;
+	float scorr_divisor;
 
 	// dem coeffcients
 	float  boundary_damping;
@@ -35,7 +36,8 @@ struct SimParams
 	float  blending_speed;
 
 	float  sor_coeff;
-	float  viscosity;
+	float  sph_viscosity;
+	float  dem_viscosity;
 
 	float3 world_origin;
 	float3 cell_size;
