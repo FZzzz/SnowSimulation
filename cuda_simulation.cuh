@@ -65,6 +65,8 @@ void snow_simulation(
     bool         dem_friction,
     bool         compute_temperature,
     bool         change_phase,
+    bool         simulate_freezing,
+    bool         simulate_melting,
     bool         dem_viscosity,
     bool         cd_on
 );

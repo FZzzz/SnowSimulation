@@ -151,9 +151,11 @@ bool Simulation::StepCUDA(float dt)
 
 	bool cd_on = true;
 	bool sph_dem_correction = true;
-	bool sph_sph_correction = true;
+	bool sph_sph_correction = false;
 	bool compute_temperature = true;
 	bool change_phase = true;
+	bool simulate_freezing = true;
+	bool simulate_melting = true;
 	//bool compute_wetness = false;
 	bool dem_friction = true;
 	bool dem_viscosity = true;
@@ -190,9 +192,6 @@ bool Simulation::StepCUDA(float dt)
 	cudaGraphicsResourceGetMappedPointer((void**)&(dem_particles->m_device_data.m_d_T), &num_bytes, dem_vbo_resource[1]);
 	cudaGraphicsResourceGetMappedPointer((void**)&(boundary_particles->m_device_data.m_d_positions), &num_bytes, *b_vbo_resource);
 	
-	// Integrate
-	//integrate(particles->m_d_positions, particles->m_d_velocity, dt, particles->m_size);
-
 	t3 = std::chrono::high_resolution_clock::now();
 
 	snow_simulation(
@@ -210,6 +209,8 @@ bool Simulation::StepCUDA(float dt)
 		dem_friction,
 		compute_temperature,
 		change_phase,
+		simulate_freezing,
+		simulate_melting,
 		dem_viscosity,
 		cd_on
 		);
@@ -337,7 +338,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->gravity = make_float3(0.f, -9.8f, 0.f);
 	m_sim_params->global_damping = 1.0;
 	m_sim_params->maximum_speed = 3.f;
-	m_sim_params->minimum_speed = 0.00f;// 1f * particle_radius * m_dt;
+	m_sim_params->minimum_speed = 0.001f * particle_radius * m_dt;
 
 	m_sim_params->particle_radius = particle_radius;
 	m_sim_params->effective_radius = effective_radius;
@@ -355,7 +356,7 @@ void Simulation::SetupSimParams()
 	//m_sim_params->sph_dem_corr = 0.05f;
 
 	m_sim_params->static_friction = 0.9f;
-	m_sim_params->kinematic_friction = 0.3f;
+	m_sim_params->kinematic_friction = 0.75f;
 
 	m_sim_params->scorr_coeff = 0.1f;
 	m_sim_params->sor_coeff = 1.0f * (1.f/4.f);
@@ -365,11 +366,11 @@ void Simulation::SetupSimParams()
 	//set up heat conduction constants
 	m_sim_params->C_snow = 2090.f;
 	m_sim_params->C_water = 4182.f;
-	m_sim_params->k_snow = 250.f;
-	m_sim_params->k_water = 60.f;
+	m_sim_params->k_snow = 25.f;
+	m_sim_params->k_water = 6.f;
 	m_sim_params->freezing_point = 0.f;
 
-	m_sim_params->blending_speed = 0.0025f;
+	m_sim_params->blending_speed = 0.0001f;
 
 	// set up sph kernel constants
 	m_sim_params->poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));

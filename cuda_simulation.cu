@@ -3271,7 +3271,7 @@ inline void compute_snow_pbf_correction(
 		dt
 	);
 
-	/*
+	
 	compute_pbf_new_dem_correction << <dem_num_blocks, dem_num_threads >> > (
 		sph_particles->m_device_data,
 		dem_particles->m_device_data,
@@ -3282,7 +3282,7 @@ inline void compute_snow_pbf_correction(
 		dem_particles->m_size,
 		dt
 	);
-	*/
+	
 
 	getLastCudaError("Kernel execution failed: compute_snow_sph_position_correction ");
 }
@@ -3318,7 +3318,7 @@ inline void compute_snow_distance_correction(
 			sph_num_particles
 			);
 		getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
-
+		
 		// correct dem particles with sph particles by distance constraint
 		compute_dem_sph_distance_correction << <dem_num_blocks, dem_num_threads >> > (
 			dem_particles->m_device_data,
@@ -3328,8 +3328,8 @@ inline void compute_snow_distance_correction(
 			dem_num_particles
 			);
 		getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
+		
 	}
-
 	if (sph_sph_correction)
 	{
 		compute_sph_sph_distance_correction << <sph_num_blocks, sph_num_threads >> > (
@@ -3973,7 +3973,7 @@ void melting(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_
 		return;
 
 	// melt -> put information to sph's tail
-	if (dem_data.m_d_T[index] > params.freezing_point)
+	if (dem_data.m_d_T[index] > params.freezing_point && dem_data.m_d_contrib[index] >= 0.99f)
 	{
 		uint target_index;
 		target_index = atomicAdd(sph_data.m_d_new_end, 1u);
@@ -4003,7 +4003,7 @@ void freezing(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num
 		return;
 	
 	// freeze -> put this particle's information to dem's tail
-	if (sph_data.m_d_T[index] <= params.freezing_point)
+	if (sph_data.m_d_T[index] <= params.freezing_point)// && sph_data.m_d_contrib[index] >= 0.99f)
 	{
 		uint target_index;
 		target_index = atomicAdd(dem_data.m_d_new_end, 1u);
@@ -4218,7 +4218,9 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 void phase_change(
 	ParticleSet* sph_particles,
 	ParticleSet* dem_particles,
-	ParticleDeviceData  buffer
+	ParticleDeviceData  buffer,
+	bool simulate_freezing = true,
+	bool simulate_melting = true
 )
 {
 	static uint frame_count = 0;
@@ -4231,12 +4233,18 @@ void phase_change(
 	//uint full_size = sph_particles->m_full_size;
 	uint num_threads, num_blocks;
 	//predicate_and_fill << <num_blocks, num_threads >> > (sph_particles->m_device_data, dem_particles->m_device_data,  full_size);
-	compute_grid_size(sph_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	freezing<<<num_blocks, num_threads>>>(sph_particles->m_device_data, dem_particles->m_device_data, sph_particles->m_size, frame_count);
-	cudaDeviceSynchronize();
-	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	//melting<<<num_blocks, num_threads>>>(sph_particles->m_device_data, dem_particles->m_device_data, dem_particles->m_size, frame_count);
-	cudaDeviceSynchronize();
+	if (simulate_freezing)
+	{
+		compute_grid_size(sph_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
+		freezing << <num_blocks, num_threads >> > (sph_particles->m_device_data, dem_particles->m_device_data, sph_particles->m_size, frame_count);
+		cudaDeviceSynchronize();
+	}
+	if (simulate_melting)
+	{
+		compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
+		melting << <num_blocks, num_threads >> > (sph_particles->m_device_data, dem_particles->m_device_data, dem_particles->m_size, frame_count);
+		cudaDeviceSynchronize();
+	}
 	compact_and_clean(sph_particles, dem_particles, buffer);
 	frame_count++;
 }
@@ -4266,6 +4274,8 @@ void snow_simulation(
 	bool dem_friction,
 	bool compute_temperature,
 	bool change_phase,
+	bool simulate_freezing,
+	bool simulate_melting,
 	bool dem_viscosity,
 	bool cd_on
 )
@@ -4318,7 +4328,7 @@ void snow_simulation(
 	}
 
 	if(change_phase)
-		phase_change(sph_particles, dem_particles, *phase_change_buffer);
+		phase_change(sph_particles, dem_particles, *phase_change_buffer, simulate_freezing, simulate_melting);
 
 
 	integrate_pbd(sph_particles, dt, sph_particles->m_size, cd_on);
