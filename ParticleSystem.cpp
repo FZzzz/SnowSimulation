@@ -327,6 +327,14 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(uint),
 			cudaMemcpyHostToDevice
 		);
+
+		cudaMemcpy(
+			(void*)m_sph_particles->m_device_data.m_d_new_end,
+			(void*)&m_sph_particles->m_size,
+			sizeof(uint),
+			cudaMemcpyHostToDevice
+		);
+		
 		//cudaMemset((void*)m_sph_particles->m_device_data.m_d_trackId, 0, n);
 
 		cuda_tool_fill_uint(m_sph_particles->m_device_data.m_d_predicate, 0, m_sph_particles->m_size, 1u);
@@ -515,6 +523,14 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float),
 			cudaMemcpyHostToDevice
 			);
+
+		cudaMemcpy(
+			(void*)m_dem_particles->m_device_data.m_d_new_end,
+			(void*)&m_dem_particles->m_size,
+			sizeof(uint),
+			cudaMemcpyHostToDevice
+		);
+
 
 		std::vector<uint> id_vec(n, 0u);
 		for (uint i = 0; i < m_dem_particles->m_size; ++i) id_vec[i] = id_count, id_count++;

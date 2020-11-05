@@ -3874,7 +3874,7 @@ void melting(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_
 		
 		dem_data.m_d_contrib[index] = 0;
 
-		//printf("(%u) %u to %u\n", frame_count ,dem_data.m_d_trackId[index], target_index);
+		//printf("(%u) DEM %u@%u \tto\t %u\n", frame_count ,dem_data.m_d_trackId[index], index, target_index);
 		//print_particle_info(dem_data, index, "DEM(Before)");
 		//print_particle_info(sph_data, target_index, "SPH");
 		copy_particle_info(dem_data, sph_data, index, target_index);
@@ -3889,7 +3889,7 @@ void melting(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_
 }
 
 __global__
-void freezing(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_particles)
+void freezing(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_particles, uint frame_count)
 {
 	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
 
@@ -3903,6 +3903,9 @@ void freezing(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num
 		target_index = atomicAdd(dem_data.m_d_new_end, 1u);
 		//printf("target_index: %u\n", target_index);
 		sph_data.m_d_contrib[index] = 0;
+
+		//printf("(%u) SPH %u@%u \tto\t %u\n", frame_count, sph_data.m_d_trackId[index], index, target_index);
+
 		copy_particle_info(sph_data, dem_data, index, target_index);
 
 		sph_data.m_d_predicate[index] = 0;
@@ -4034,7 +4037,7 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	static uint count=0, sph_size=0, dem_size=0;
 	static bool debug_flag = false;
 
-	uint num_threads, num_blocks;
+	uint num_threads, num_blocks, full_num_threads, full_num_blocks;
 	uint sph_new_size, dem_new_size;
 	uint full_size = sph_particles->m_full_size;
 
@@ -4054,17 +4057,18 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	if (debug_flag)
 		printf("Before verification: "),  verification(sph_particles, dem_particles), debug_flag=false;
 	*/
-
 	// copy sph to tmp
+	compute_grid_size(full_size, MAX_THREAD_NUM, full_num_blocks, full_num_threads);
+	copy_to_target << <full_num_blocks, full_num_threads >> > (sph_particles->m_device_data, buffer, full_size);
 	compute_grid_size(sph_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	copy_to_target <<<num_blocks, num_threads>>> (sph_particles->m_device_data, buffer, sph_particles->m_size);
-	scatter <<<num_blocks, num_threads >>> (sph_particles->m_device_data, buffer, sph_particles->m_size);
+	scatter <<<full_num_blocks, full_num_threads >>> (sph_particles->m_device_data, buffer, full_size);
 	getLastCudaError("Kernel execution failed: scatter ");
 	cudaDeviceSynchronize();
+
 	// copy dem to tmp
+	copy_to_target << <full_num_blocks, full_num_threads >> > (dem_particles->m_device_data, buffer, full_size);
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	copy_to_target <<<num_blocks, num_threads >>> (dem_particles->m_device_data, buffer, dem_particles->m_size);
-	scatter <<< num_blocks, num_threads >>> (dem_particles->m_device_data, buffer, dem_particles->m_size);
+	scatter <<< full_num_blocks, full_num_threads >>> (dem_particles->m_device_data, buffer, full_size);
 	getLastCudaError("Kernel execution failed: scatter ");
 	cudaDeviceSynchronize();
 	// reset size on CPU for draw call
@@ -4077,14 +4081,15 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	cudaDeviceSynchronize();
 	// clean
 	
-	
+	// fill front (reserve)
 	thrust::fill(sph_predicate_ptr, sph_predicate_ptr + sph_new_size, 1u);
-	thrust::fill(sph_predicate_ptr + sph_new_size, sph_predicate_ptr + full_size, 0u);
-
 	thrust::fill(dem_predicate_ptr, dem_predicate_ptr + dem_new_size, 1u);
-	thrust::fill(dem_predicate_ptr + dem_new_size, dem_predicate_ptr + full_size, 0u);
 	
-	/*
+	// fill tail (clean)
+	//thrust::fill(sph_predicate_ptr + sph_new_size, sph_predicate_ptr + full_size, 0u);
+	//thrust::fill(dem_predicate_ptr + dem_new_size, dem_predicate_ptr + full_size, 0u);
+	
+	
 	uint sph_tail_size = full_size - sph_new_size, dem_tail_size = full_size - dem_new_size;
 	compute_grid_size(sph_tail_size, MAX_THREAD_NUM, num_blocks, num_threads);
 	clean_tail <<<num_blocks, num_threads>>> (sph_particles->m_device_data, sph_tail_size);
@@ -4094,7 +4099,7 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	clean_tail <<<num_blocks, num_threads>>> (dem_particles->m_device_data, dem_tail_size);
 	getLastCudaError("Kernel execution failed: clean_tail ");
 	cudaDeviceSynchronize();
-	*/
+	
 	/*
 	if (sph_size != sph_particles->m_size)
 		printf("(%u)New SPH size: %u\n", count, sph_particles->m_size), sph_size = sph_particles->m_size;
@@ -4121,7 +4126,7 @@ void phase_change(
 	uint num_threads, num_blocks;
 	//predicate_and_fill << <num_blocks, num_threads >> > (sph_particles->m_device_data, dem_particles->m_device_data,  full_size);
 	compute_grid_size(sph_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	freezing<<<num_blocks, num_threads>>>(sph_particles->m_device_data, dem_particles->m_device_data, sph_particles->m_size);
+	//freezing<<<num_blocks, num_threads>>>(sph_particles->m_device_data, dem_particles->m_device_data, sph_particles->m_size, frame_count);
 	cudaDeviceSynchronize();
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
 	melting<<<num_blocks, num_threads>>>(sph_particles->m_device_data, dem_particles->m_device_data, dem_particles->m_size, frame_count);
