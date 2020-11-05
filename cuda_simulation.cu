@@ -1694,7 +1694,7 @@ float3 pbd_distance_correction_coupling_contrib(
 				float3 n = v / (dist + params.pbd_epsilon);// +0.000001f);
 
 				correction_j = -w0 * (1.f / w_sum) * C * n;
-				//correction_j *= other_contrib[original_index_j];
+				correction_j *= other_contrib[original_index_j];
 			}
 
 			correction += correction_j;
@@ -3906,7 +3906,7 @@ void freezing(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num
 		copy_particle_info(sph_data, dem_data, index, target_index);
 
 		sph_data.m_d_predicate[index] = 0;
-		
+		sph_data.m_d_trackId[index] = 0;
 		dem_data.m_d_predicate[target_index] = 1;
 	}
 }
@@ -4121,8 +4121,8 @@ void phase_change(
 	uint num_threads, num_blocks;
 	//predicate_and_fill << <num_blocks, num_threads >> > (sph_particles->m_device_data, dem_particles->m_device_data,  full_size);
 	compute_grid_size(sph_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	//freezing<<<num_blocks, num_threads>>>(sph_particles->m_device_data, dem_particles->m_device_data, sph_particles->m_size);
-
+	freezing<<<num_blocks, num_threads>>>(sph_particles->m_device_data, dem_particles->m_device_data, sph_particles->m_size);
+	cudaDeviceSynchronize();
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
 	melting<<<num_blocks, num_threads>>>(sph_particles->m_device_data, dem_particles->m_device_data, dem_particles->m_size, frame_count);
 	cudaDeviceSynchronize();
