@@ -43,7 +43,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	glm::vec3 fluid_origin = glm::vec3(-0.151f, 0.8f, 0.0f);
 	glm::vec3 snow_origin = glm::vec3(0.251f, 0.275f, 0.0f);
 	
-	const float sph_temperature = 50.f;
+	const float sph_temperature = 5.f;
 	const float dem_temperature = -5.f;
 
 	m_particle_system->setHottestTemperature(sph_temperature + 0.1f * glm::abs(sph_temperature));
@@ -337,7 +337,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->gravity = make_float3(0.f, -9.8f, 0.f);
 	m_sim_params->global_damping = 1.0;
 	m_sim_params->maximum_speed = 3.f;
-	m_sim_params->minimum_speed = 0.001f * particle_radius * m_dt;
+	m_sim_params->minimum_speed = 0.00f;// 1f * particle_radius * m_dt;
 
 	m_sim_params->particle_radius = particle_radius;
 	m_sim_params->effective_radius = effective_radius;
@@ -355,7 +355,7 @@ void Simulation::SetupSimParams()
 	//m_sim_params->sph_dem_corr = 0.05f;
 
 	m_sim_params->static_friction = 0.9f;
-	m_sim_params->kinematic_friction = 0.75f;
+	m_sim_params->kinematic_friction = 0.3f;
 
 	m_sim_params->scorr_coeff = 0.1f;
 	m_sim_params->sor_coeff = 1.0f * (1.f/4.f);
@@ -369,7 +369,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->k_water = 60.f;
 	m_sim_params->freezing_point = 0.f;
 
-	m_sim_params->blending_speed = 0.025f;
+	m_sim_params->blending_speed = 0.0025f;
 
 	// set up sph kernel constants
 	m_sim_params->poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));

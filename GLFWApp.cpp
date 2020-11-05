@@ -227,7 +227,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 
 	// Simulation control settings
 	{
-		uint32_t iterations = 10;
+		uint32_t iterations = 3;
 		int clip_length = 200000;
 		m_simulator->SetSolverIteration(iterations);
 		m_simulator->setClipLength(clip_length);
@@ -412,8 +412,8 @@ void Mouse_scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
 	auto camera = GLFWApp::getInstance()->getMainCamera();
 
-	camera->Zoom(-0.1f * yoffset);
-	//camera->MoveForward(0.1f * yoffset);
+	//camera->Zoom(-0.1f * yoffset);
+	camera->MoveForward(0.1f * yoffset);
 }
 
 void GLFWApp::Render()

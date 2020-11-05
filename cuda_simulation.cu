@@ -875,13 +875,6 @@ float3 pbf_correction(
 	float	lambda_i,
 	float*	lambdas,
 	float*  contrib,
-	/*
-	float3* sorted_pos,
-	
-	uint*	cell_start,
-	uint*	cell_end,
-	uint*	gridParticleIndex,
-	*/
 	CellData cell_data,
 	float	dt)
 {
@@ -909,17 +902,11 @@ float3 pbf_correction(
 				const float3 gradient = sph_kernel_spiky_gradient(vec, dist, params.effective_radius);
 				
 				float x = sph_kernel_poly6(dist, params.effective_radius) / params.scorr_divisor;
-					//sph_kernel_poly6(0.3f * params.effective_radius, params.effective_radius);
 				x = pow(x, 4);
-				const float scorr = -params.scorr_coeff * x * dt * dt * dt;
-				
-				//printf("scorr: %f\n", scorr);
+				const float scorr = -params.scorr_coeff * x * dt * dt;
 
-				//float3 res = //(1.f / params.rest_density) *
-				
 				correction += contrib[original_index] * (lambda_i + lambdas[original_index] + scorr) * gradient;
-				//if(contrib[original_index] < 1.f)
-					//printf("%u: %f Correction %f\n", original_index, contrib[original_index], length(correction) );
+
 			}
 		}
 
@@ -968,11 +955,7 @@ float3 pbf_correction_boundary(
 			x = pow(x, 4);
 			scorr = scorr * x * dt * dt;
 
-			//printf("scorr: %f\n", scorr);
-
-			float3 res = //(1.f / params.rest_density) *
-				(lambda_i + lambda_j) *// +scorr)*
-				gradient;
+			float3 res = (lambda_i + lambda_j + scorr) * gradient;
 
 			correction += res;
 		}
@@ -1026,11 +1009,7 @@ float3 pbf_correction_coupling(
 					x = pow(x, 4);
 					scorr = scorr * x * dt * dt;
 
-					//printf("scorr: %f\n", scorr);
-
-					float3 res = //(1.f / params.rest_density) *
-						(lambda_i + lambda_j) *// +scorr)*
-						gradient;
+					float3 res = (lambda_i + lambda_j + scorr) * gradient;
 
 					correction += res;
 				}				
@@ -1515,7 +1494,7 @@ float3 pbd_distance_correction_contrib(
 					float3 n = v / (dist + params.pbd_epsilon);// +0.000001f);
 
 					correction_j = -w0 * (1.f / w_sum) * C * n;
-					correction_j *= contrib[original_index_j];
+					//correction_j *= contrib[original_index_j];
 				}
 			}
 			correction += correction_j;
@@ -1589,8 +1568,8 @@ float3 pbd_sph_sph_distance_correction(
 	uint    index,
 	float3  pos,
 	float	w0,
-	float* invMass,
-	float* contrib,
+	float  contrib,
+	float* invMass,	
 	CellData cell_data
 )
 {
@@ -1615,7 +1594,7 @@ float3 pbd_sph_sph_distance_correction(
 			{
 				uint original_index_j = cell_data.grid_index[j];
 
-				if (contrib[original_index_j] <= 0.99f)
+				if (contrib <= 0.99f)
 				{
 
 					float3 pos2 = cell_data.sorted_pos[j];
@@ -1634,7 +1613,6 @@ float3 pbd_sph_sph_distance_correction(
 						float3 n = v / (dist + params.pbd_epsilon);// +0.000001f);
 
 						correction_j = -w0 * (1.f / w_sum) * C * n;
-						correction_j *= (1.f - contrib[original_index_j]);
 					}
 				}
 			}
@@ -1694,7 +1672,7 @@ float3 pbd_distance_correction_coupling_contrib(
 				float3 n = v / (dist + params.pbd_epsilon);// +0.000001f);
 
 				correction_j = -w0 * (1.f / w_sum) * C * n;
-				correction_j *= other_contrib[original_index_j];
+				//correction_j *= other_contrib[original_index_j];
 			}
 
 			correction += correction_j;
@@ -1764,12 +1742,9 @@ float3 pbd_distance_correction_boundary(
 }
 
 __global__
-void compute_distance_correction(
-	float3*		correction,		// output: corrected pos
-	float*		invMass,		// input: mass
-	float*		contrib,
-	float*		b_invMass,
-	float*      b_contrib,
+void compute_dem_distance_correction(
+	ParticleDeviceData dem_data,
+	ParticleDeviceData b_data,
 	CellData	cell_data,		// input: cell data of dem particles
 	CellData	b_cell_data,
 	uint		numParticles	// input: number of DEM particles
@@ -1783,7 +1758,7 @@ void compute_distance_correction(
 
 	// read particle data from sorted arrays
 	float3 pos = cell_data.sorted_pos[index];
-	float w0 = invMass[original_index];
+	float w0 = dem_data.m_d_massInv[original_index];
 	// get address in grid
 	int3 gridPos = calcGridPos(pos);
 
@@ -1801,8 +1776,8 @@ void compute_distance_correction(
 				corr += pbd_distance_correction_contrib(
 					neighbor_pos, index,
 					pos, w0,
-					invMass,
-					contrib,
+					dem_data.m_d_massInv,
+					dem_data.m_d_contrib,
 					cell_data
 				);
 			}
@@ -1820,15 +1795,16 @@ void compute_distance_correction(
 				corr += pbd_distance_correction_coupling_contrib(
 					neighbor_pos, index,
 					pos, w0,
-					b_invMass,
-					b_contrib,
+					b_data.m_d_massInv,
+					b_data.m_d_contrib,
 					b_cell_data
 				);
 			}
 		}
 	}
 
-	correction[original_index] += corr;
+	corr *= dem_data.m_d_contrib[original_index];
+	dem_data.m_d_correction[original_index] += corr;
 }
 
 inline __device__
@@ -1911,7 +1887,6 @@ float3 pbd_friction_correction(
 			result += correction_j;
 		}
 
-		//printf("Num neighbors: %u\n", end_index - start_index);
 	}
 	return result;
 }
@@ -1981,8 +1956,6 @@ float3 pbd_friction_correction_boundary(
 			}
 			result += correction_j;
 		}
-
-		//printf("Num neighbors: %u\n", end_index - start_index);
 	}
 	return result;
 }
@@ -2050,25 +2023,15 @@ void compute_friction_correction(
 			}
 		}
 	}
-	
-	 
-	//printf("corr: %f %f %f\n", corr.x, corr.y, corr.z);
-	
-
-	//corr = 0.5f * (correction_i + corr);
 	correction[original_index] = corr;
-	//new_pos[original_index] = pos + corr;
 }
 
 __global__
 void compute_sph_dem_distance_correction(
-	float3* correction,		// output: corrected pos
-	float* invMass,		// input: mass
-	//float* contrib,
-	float* other_invMass,
-	float* other_contrib,
-	CellData	cell_data,		// input: cell data of dem particles
-	CellData	other_cell_data,
+	ParticleDeviceData sph_data,
+	ParticleDeviceData dem_data,
+	CellData	sph_cell_data,		// input: cell data of dem particles
+	CellData	dem_cell_data,
 	uint		numParticles	// input: number of sph particles
 	)
 {
@@ -2076,11 +2039,11 @@ void compute_sph_dem_distance_correction(
 
 	if (index >= numParticles) return;
 
-	uint original_index = cell_data.grid_index[index];
+	uint original_index = sph_cell_data.grid_index[index];
 
 	// read particle data from sorted arrays
-	float3 pos = cell_data.sorted_pos[index];
-	float w0 = invMass[original_index];
+	float3 pos = sph_cell_data.sorted_pos[index];
+	float w0 = sph_data.m_d_massInv[original_index];
 	// get address in grid
 	int3 gridPos = calcGridPos(pos);
 
@@ -2096,16 +2059,64 @@ void compute_sph_dem_distance_correction(
 				corr += pbd_distance_correction_coupling_contrib(
 					neighbor_pos, index,
 					pos, w0,
-					other_invMass,
-					other_contrib,
-					other_cell_data
+					dem_data.m_d_massInv,
+					dem_data.m_d_contrib,
+					dem_cell_data
 					);
-				//corr *= contrib[original_index];
 			}
 		}
 	}
 
-	correction[original_index] += corr;
+	corr *= (1.f - sph_data.m_d_contrib[original_index]);
+
+	sph_data.m_d_correction[original_index] += corr;
+}
+
+__global__
+void compute_dem_sph_distance_correction(
+	ParticleDeviceData dem_data,
+	ParticleDeviceData sph_data,
+	CellData	dem_cell_data,		// input: cell data of dem particles
+	CellData	sph_cell_data,
+	uint		numParticles	// input: number of sph particles
+	)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= numParticles) return;
+
+	uint original_index = dem_cell_data.grid_index[index];
+
+	// read particle data from sorted arrays
+	float3 pos = dem_cell_data.sorted_pos[index];
+	float w0 = dem_data.m_d_massInv[original_index];
+	// get address in grid
+	int3 gridPos = calcGridPos(pos);
+
+	float3 corr = make_float3(0, 0, 0);
+
+	for (int z = -1; z <= 1; z++)
+	{
+		for (int y = -1; y <= 1; y++)
+		{
+			for (int x = -1; x <= 1; x++)
+			{
+				int3 neighbor_pos = gridPos + make_int3(x, y, z);
+				corr += pbd_distance_correction_coupling_contrib(
+					neighbor_pos, index,
+					pos, w0,
+					sph_data.m_d_massInv,
+					sph_data.m_d_contrib,
+					sph_cell_data
+					);
+			}
+		}
+	}
+
+	//corr_{new_dem} = (1-a) corr_{sph} + "a corr_{dem}"
+	corr *= dem_data.m_d_contrib[original_index];
+
+	dem_data.m_d_correction[original_index] += corr;
 }
 
 __global__
@@ -2148,15 +2159,14 @@ void compute_sph_sph_distance_correction(
 				int3 neighbor_pos = gridPos + make_int3(x, y, z);
 				corr += pbd_sph_sph_distance_correction(
 					neighbor_pos, index,
-					pos, w0,
+					pos, w0, contrib[original_index],
 					invMass,
-					contrib,
 					sph_cell_data
 					);
 			}
 		}
 	}
-
+	corr *= (1.f - contrib[original_index]);
 	correction[original_index] += corr;
 }
 
@@ -3012,18 +3022,10 @@ bool sphere_cd_coupling(
 }
 
 __global__
-void compute_snow_sph_position_correction(
+void compute_pbf_sph_correction(
 	ParticleDeviceData sph_data,
 	ParticleDeviceData dem_data,
 	ParticleDeviceData b_data,
-	/*
-	float* sph_lambda,						// output: computed density
-	float* sph_C,
-	float* sph_contrib,
-	float* dem_lambda,
- 	float* b_lambda,					// input: lambdas in boundary particles
-	float3* sph_correction,					// output: accumulated correction
-	*/
 	// boundary
 	CellData sph_cell_data,
 	CellData dem_cell_data,
@@ -3036,7 +3038,7 @@ void compute_snow_sph_position_correction(
 
 	if (index >= numParticles) return;
 
-	uint originalIndex = sph_cell_data.grid_index[index];
+	uint original_index = sph_cell_data.grid_index[index];
 
 	//cache data
 	float* sph_lambda = sph_data.m_d_lambda;
@@ -3053,18 +3055,12 @@ void compute_snow_sph_position_correction(
 	float3 pos = sph_cell_data.sorted_pos[index];
 
 	// initial density
-	float lambda_i = sph_lambda[originalIndex];
+	float lambda_i = sph_lambda[original_index];
 
 	// get address in grid
 	int3 gridPos = calcGridPos(pos);
 
 	float3 corr = make_float3(0, 0, 0);
-
-	/*
-	if (sph_C[originalIndex] == 0)
-		return;
-	*/
-
 	// traverse 27 neighbors
 	// sph-sph
 
@@ -3084,7 +3080,6 @@ void compute_snow_sph_position_correction(
 			}
 		}
 	}
-
 	
 	//sph-dem
 
@@ -3131,12 +3126,118 @@ void compute_snow_sph_position_correction(
 			}
 		}
 	}
-	/*
-	if (sph_data.m_d_C[originalIndex] <= 0.f)
-		return;
-	*/
+
 	corr = (1.f / params.rest_density) * corr;
-	sph_correction[originalIndex] += corr;
+	corr *= sph_data.m_d_contrib[original_index];
+	sph_correction[original_index] += corr;
+}
+
+// This function corrects the new dem particles comes from melting to prevent sudden changes in position
+__global__
+void compute_pbf_new_dem_correction(
+	ParticleDeviceData sph_data,
+	ParticleDeviceData dem_data,
+	ParticleDeviceData b_data,
+	// boundary
+	CellData sph_cell_data,
+	CellData dem_cell_data,
+	CellData b_cell_data,
+	uint	numParticles,
+	float	dt
+	)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= numParticles) return;
+
+	uint original_index = sph_cell_data.grid_index[index];
+
+	//cache data
+	float* sph_lambda = sph_data.m_d_lambda;
+	float* sph_C = sph_data.m_d_C;
+	float* sph_contrib = sph_data.m_d_contrib;
+
+	float* dem_lambda = dem_data.m_d_lambda;
+	float* b_lambda = b_data.m_d_lambda;
+
+	// read particle data from sorted arrays
+	float3 pos = dem_cell_data.sorted_pos[index];
+
+	// initial density
+	float lambda_i = dem_data.m_d_lambda[original_index];
+
+	// get address in grid
+	int3 gridPos = calcGridPos(pos);
+
+	float3 corr = make_float3(0, 0, 0);
+	
+	// traverse 27 neighbors
+	// dem-sph
+	for (int z = -1; z <= 1; z++)
+	{
+		for (int y = -1; y <= 1; y++)
+		{
+			for (int x = -1; x <= 1; x++)
+			{
+				int3 neighbor_pos = gridPos + make_int3(x, y, z);
+				corr += pbf_correction_coupling(
+					neighbor_pos, index,
+					pos, lambda_i, sph_cell_data,
+					sph_lambda,
+					dt
+					);
+			}
+		}
+	}
+
+	//dem-dem
+	for (int z = -1; z <= 1; z++)
+	{
+		for (int y = -1; y <= 1; y++)
+		{
+			for (int x = -1; x <= 1; x++)
+			{
+				int3 neighbor_pos = gridPos + make_int3(x, y, z);
+				corr += pbf_correction(
+					neighbor_pos,
+					index,
+					pos,
+					lambda_i,
+					dem_data.m_d_lambda,
+					dem_data.m_d_contrib,
+					dem_cell_data,
+					dt
+					);
+			}
+		}
+	}
+
+
+
+	// dem-boundary
+	for (int z = -1; z <= 1; z++)
+	{
+		for (int y = -1; y <= 1; y++)
+		{
+			for (int x = -1; x <= 1; x++)
+			{
+				int3 neighbor_pos = gridPos + make_int3(x, y, z);
+				corr += pbf_correction_boundary(
+					neighbor_pos,
+					index,
+					pos,
+					lambda_i,
+					b_cell_data,
+					b_lambda,
+					dt
+					);
+			}
+		}
+	}
+
+	corr = (1.f / params.rest_density) * corr;
+	corr *= (1.f - dem_data.m_d_contrib[original_index]);
+	dem_data.m_d_correction[original_index] += corr;
 }
 
 inline void compute_snow_pbf_correction(
@@ -3152,14 +3253,14 @@ inline void compute_snow_pbf_correction(
 	float dt
 )
 {
-	uint num_threads, num_blocks;
+	uint sph_num_threads, sph_num_blocks;
 	uint dem_num_threads, dem_num_blocks;
-	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, num_blocks, num_threads);
+	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, sph_num_blocks, sph_num_threads);
 	compute_grid_size(dem_num_particles, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
 
 	// sph-sph correction
 	// sph-b correction
-	compute_snow_sph_position_correction << <num_blocks, num_threads >> > (
+	compute_pbf_sph_correction << <sph_num_blocks, sph_num_threads >> > (
 		sph_particles->m_device_data,
 		dem_particles->m_device_data,
 		boundary_particles->m_device_data,
@@ -3169,7 +3270,21 @@ inline void compute_snow_pbf_correction(
 		sph_num_particles,
 		dt
 	);
-	getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
+
+	/*
+	compute_pbf_new_dem_correction << <dem_num_blocks, dem_num_threads >> > (
+		sph_particles->m_device_data,
+		dem_particles->m_device_data,
+		boundary_particles->m_device_data,
+		sph_cell_data,
+		dem_cell_data,
+		b_cell_data,
+		dem_particles->m_size,
+		dt
+	);
+	*/
+
+	getLastCudaError("Kernel execution failed: compute_snow_sph_position_correction ");
 }
 
 inline void compute_snow_distance_correction(
@@ -3196,11 +3311,8 @@ inline void compute_snow_distance_correction(
 	{
 		// correct sph particles with dem particles by distance constraint
 		compute_sph_dem_distance_correction << <sph_num_blocks, sph_num_threads >> > (
-			sph_particles->m_device_data.m_d_correction,
-			sph_particles->m_device_data.m_d_massInv,
-			//sph_particles->m_device_data.m_d_contrib,
-			dem_particles->m_device_data.m_d_massInv,
-			dem_particles->m_device_data.m_d_contrib,
+			sph_particles->m_device_data,
+			dem_particles->m_device_data,
 			sph_cell_data,
 			dem_cell_data,
 			sph_num_particles
@@ -3208,12 +3320,9 @@ inline void compute_snow_distance_correction(
 		getLastCudaError("Kernel execution failed: compute_sph_dem_distance_correction ");
 
 		// correct dem particles with sph particles by distance constraint
-		compute_sph_dem_distance_correction << <dem_num_blocks, dem_num_threads >> > (
-			dem_particles->m_device_data.m_d_correction,
-			dem_particles->m_device_data.m_d_massInv,
-			//dem_particles->m_device_data.m_d_contrib,
-			sph_particles->m_device_data.m_d_massInv,
-			sph_particles->m_device_data.m_d_contrib,
+		compute_dem_sph_distance_correction << <dem_num_blocks, dem_num_threads >> > (
+			dem_particles->m_device_data,
+			sph_particles->m_device_data,
 			dem_cell_data,
 			sph_cell_data,
 			dem_num_particles
@@ -3232,12 +3341,9 @@ inline void compute_snow_distance_correction(
 
 	// dem-dem distance correction
 	// dem-boundary distance correction
-	compute_distance_correction << <dem_num_blocks, dem_num_threads >> > (
-		dem_particles->m_device_data.m_d_correction,
-		dem_particles->m_device_data.m_d_massInv,
-		dem_particles->m_device_data.m_d_contrib,
-		boundary_particles->m_device_data.m_d_massInv,
-		boundary_particles->m_device_data.m_d_contrib,
+	compute_dem_distance_correction << <dem_num_blocks, dem_num_threads >> > (
+		dem_particles->m_device_data,
+		boundary_particles->m_device_data,
 		dem_cell_data,
 		b_cell_data,
 		dem_num_particles
@@ -4126,10 +4232,10 @@ void phase_change(
 	uint num_threads, num_blocks;
 	//predicate_and_fill << <num_blocks, num_threads >> > (sph_particles->m_device_data, dem_particles->m_device_data,  full_size);
 	compute_grid_size(sph_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	//freezing<<<num_blocks, num_threads>>>(sph_particles->m_device_data, dem_particles->m_device_data, sph_particles->m_size, frame_count);
+	freezing<<<num_blocks, num_threads>>>(sph_particles->m_device_data, dem_particles->m_device_data, sph_particles->m_size, frame_count);
 	cudaDeviceSynchronize();
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	melting<<<num_blocks, num_threads>>>(sph_particles->m_device_data, dem_particles->m_device_data, dem_particles->m_size, frame_count);
+	//melting<<<num_blocks, num_threads>>>(sph_particles->m_device_data, dem_particles->m_device_data, dem_particles->m_size, frame_count);
 	cudaDeviceSynchronize();
 	compact_and_clean(sph_particles, dem_particles, buffer);
 	frame_count++;
