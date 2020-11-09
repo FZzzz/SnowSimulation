@@ -41,6 +41,12 @@ struct ParticleDeviceData
 	uint*  m_d_scan_index;
 	uint*  m_d_new_end;
 
+	/* parameters for refreezing */
+	uint* m_d_connect_record;
+	uint* m_d_iter_end;
+	uint* m_d_connect_length;
+
+
 	uint*  m_d_trackId;
 };
 

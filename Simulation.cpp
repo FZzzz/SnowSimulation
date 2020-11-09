@@ -338,7 +338,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->gravity = make_float3(0.f, -9.8f, 0.f);
 	m_sim_params->global_damping = 1.0;
 	m_sim_params->maximum_speed = 3.f;
-	m_sim_params->minimum_speed = 0.001f * particle_radius * m_dt;
+	m_sim_params->minimum_speed = 0.0005f * particle_radius * m_dt;
 
 	m_sim_params->particle_radius = particle_radius;
 	m_sim_params->effective_radius = effective_radius;
@@ -370,7 +370,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->k_water = 6.f;
 	m_sim_params->freezing_point = 0.f;
 
-	m_sim_params->blending_speed = 0.0001f;
+	m_sim_params->blending_speed = 0.001f;
 
 	// set up sph kernel constants
 	m_sim_params->poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));
