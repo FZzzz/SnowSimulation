@@ -10,5 +10,6 @@
 #include <thrust/scan.h>
 
 void cuda_tool_fill_uint(uint* d_arr, size_t start, size_t end, uint value);
+void cuda_tool_fill_float(float* d_arr, size_t start, size_t end, float value);
 
 #endif

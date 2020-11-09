@@ -101,6 +101,9 @@ void ParticleSystem::Release()
 		cudaFree(m_buffer_device_data->m_d_scan_index);
 		cudaFree(m_buffer_device_data->m_d_new_end);
 		cudaFree(m_buffer_device_data->m_d_contrib);
+		cudaFree(m_buffer_device_data->m_d_connect_record);
+		cudaFree(m_buffer_device_data->m_d_iter_end);
+		cudaFree(m_buffer_device_data->m_d_connect_length);
 
 		delete m_buffer_device_data;
 	}
@@ -234,6 +237,19 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(uint)
 		);
 
+		cudaMalloc(
+			(void**)&(m_sph_particles->m_device_data.m_d_connect_record),
+			m_maximum_connection* n * sizeof(uint)
+		);
+		cudaMalloc(
+			(void**)&(m_sph_particles->m_device_data.m_d_iter_end),
+			n * sizeof(uint)
+		);
+		cudaMalloc(
+			(void**)&(m_sph_particles->m_device_data.m_d_connect_length),
+			m_maximum_connection* n * sizeof(float)
+		);
+
 
 		// Set value
 		cudaMemcpy(
@@ -321,6 +337,10 @@ void ParticleSystem::SetupCUDAMemory()
 
 		std::vector<uint> id_vec(n, 0u);
 		for (uint i = 0; i < m_sph_particles->m_size; ++i) id_vec[i] = id_count, id_count++;
+
+		std::vector<uint> iter_end(n);
+		for (uint i = 0; i < n; ++i) iter_end[i] = (m_maximum_connection * i + 1) - 1;
+
 		cudaMemcpy(
 			(void*)m_sph_particles->m_device_data.m_d_trackId,
 			(void*)id_vec.data(),
@@ -334,12 +354,25 @@ void ParticleSystem::SetupCUDAMemory()
 			sizeof(uint),
 			cudaMemcpyHostToDevice
 		);
-		
+				
 		//cudaMemset((void*)m_sph_particles->m_device_data.m_d_trackId, 0, n);
 
 		cuda_tool_fill_uint(m_sph_particles->m_device_data.m_d_predicate, 0, m_sph_particles->m_size, 1u);
 		cuda_tool_fill_uint(m_sph_particles->m_device_data.m_d_predicate, m_sph_particles->m_size, m_sph_particles->m_full_size, 0u);
 		cuda_tool_fill_uint(m_sph_particles->m_device_data.m_d_scan_index, 0, m_sph_particles->m_full_size, 0u);
+
+		// set initial value of conect record to MAXIMUM of uint
+		// There's is no need to use in SPH, but we still give it to prevent potential bugs caused by compact_and_clean()
+		cuda_tool_fill_uint(m_sph_particles->m_device_data.m_d_connect_record, 0, m_maximum_connection * n, UINT_MAX);
+		cuda_tool_fill_float(m_sph_particles->m_device_data.m_d_connect_length, 0, m_maximum_connection * n, 0.f);
+
+		cudaMemcpy(
+			(void*)m_sph_particles->m_device_data.m_d_iter_end,
+			(void*)iter_end.data(),
+			n * sizeof(uint),
+			cudaMemcpyHostToDevice
+		);
+
 
 	}// end of fluid particle settings
 
@@ -440,6 +473,20 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float)
 		);
 
+		// refreezing parameters
+		cudaMalloc(
+			(void**)&(m_dem_particles->m_device_data.m_d_connect_record),
+			m_maximum_connection* n * sizeof(uint)
+		);
+		cudaMalloc(
+			(void**)&(m_dem_particles->m_device_data.m_d_iter_end),
+			n * sizeof(uint)
+		);
+		cudaMalloc(
+			(void**)&(m_dem_particles->m_device_data.m_d_connect_length),
+			m_maximum_connection* n * sizeof(float)
+		);
+
 		// Set value
 		cudaMemcpy(
 		(void*)m_dem_particles->m_device_data.m_d_predict_positions,
@@ -534,6 +581,10 @@ void ParticleSystem::SetupCUDAMemory()
 
 		std::vector<uint> id_vec(n, 0u);
 		for (uint i = 0; i < m_dem_particles->m_size; ++i) id_vec[i] = id_count, id_count++;
+
+		std::vector<uint> iter_end(n);
+		for (uint i = 0; i < n; ++i) iter_end[i] = (m_maximum_connection * i + 1) - 1;
+
 		cudaMemcpy(
 			(void*)m_dem_particles->m_device_data.m_d_trackId,
 			(void*)id_vec.data(),
@@ -544,6 +595,18 @@ void ParticleSystem::SetupCUDAMemory()
 		cuda_tool_fill_uint(m_dem_particles->m_device_data.m_d_predicate, 0, m_dem_particles->m_size, 1u);
 		cuda_tool_fill_uint(m_dem_particles->m_device_data.m_d_predicate, m_dem_particles->m_size, m_dem_particles->m_full_size, 0u);
 		cuda_tool_fill_uint(m_dem_particles->m_device_data.m_d_scan_index, 0, m_dem_particles->m_full_size, 0u);
+
+		// set initial value of conect record to MAXIMUM of uint
+		// There's is no need to use in SPH, but we still give it to prevent potential bugs caused by compact_and_clean()
+		cuda_tool_fill_uint(m_dem_particles->m_device_data.m_d_connect_record, 0, m_maximum_connection * n, UINT_MAX);
+		cuda_tool_fill_float(m_dem_particles->m_device_data.m_d_connect_length, 0, m_maximum_connection * n, 0.f);
+
+		cudaMemcpy(
+			(void*)m_dem_particles->m_device_data.m_d_iter_end,
+			(void*)iter_end.data(),
+			n * sizeof(uint),
+			cudaMemcpyHostToDevice
+		);
 
 	}// end of DEM particle setting
 
@@ -657,6 +720,7 @@ void ParticleSystem::SetupCUDAMemory()
 
 	}// end of boundary particle settings
 
+	// tmp buffer allocation
 	{
 		uint n = m_sph_particles->m_full_size;
 		m_buffer_device_data = new ParticleDeviceData();
@@ -714,7 +778,6 @@ void ParticleSystem::SetupCUDAMemory()
 			n * sizeof(float)
 		);
 
-
 		cudaMalloc(
 			(void**)&(m_buffer_device_data->m_d_new_T),
 			n * sizeof(float)
@@ -749,7 +812,22 @@ void ParticleSystem::SetupCUDAMemory()
 			(void**)&(m_buffer_device_data->m_d_trackId),
 			n * sizeof(uint)
 		);
-	}
+
+		// refreezing parameters
+		cudaMalloc(
+			(void**)&(m_buffer_device_data->m_d_connect_record),
+			m_maximum_connection* n * sizeof(uint)
+		);
+		cudaMalloc(
+		(void**)&(m_buffer_device_data->m_d_iter_end),
+			n * sizeof(uint)
+			);
+		cudaMalloc(
+			(void**)&(m_buffer_device_data->m_d_connect_length),
+			m_maximum_connection* n * sizeof(float)
+		);
+
+	}// end of tmp buffer allocation
 
 }
 

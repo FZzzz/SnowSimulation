@@ -370,7 +370,7 @@ void ParticleSet::ResetPositions(std::vector<glm::vec3> positions, float particl
 
 void ParticleSet::ReleaseDeviceData()
 {
-	// Release fluid particle cuda memory
+	// Release cuda memory
 	if (m_device_data.m_d_predict_positions != nullptr) cudaFree(m_device_data.m_d_predict_positions);
 	if (m_device_data.m_d_new_positions != nullptr) cudaFree(m_device_data.m_d_new_positions);
 	if (m_device_data.m_d_velocity != nullptr) cudaFree(m_device_data.m_d_velocity);
@@ -391,6 +391,11 @@ void ParticleSet::ReleaseDeviceData()
 	if (m_device_data.m_d_new_end != nullptr) cudaFree(m_device_data.m_d_new_end);
 
 	if (m_device_data.m_d_contrib != nullptr) cudaFree(m_device_data.m_d_contrib);
+ 
+	if (m_device_data.m_d_connect_record != nullptr) cudaFree(m_device_data.m_d_connect_record);
+	if (m_device_data.m_d_connect_length != nullptr) cudaFree(m_device_data.m_d_connect_length);
+	if (m_device_data.m_d_iter_end != nullptr) cudaFree(m_device_data.m_d_iter_end);
+	
 
 }
 

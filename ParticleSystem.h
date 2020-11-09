@@ -29,7 +29,7 @@ public:
 	void setParticleRadius(float particle_radius);
 	void setHottestTemperature(float value) { m_hottest_temperature = value; };
 	void setCoolestTemperature(float value) { m_coolest_temperature = value; };
-
+	void setMaximumConnection(uint max_connection) { m_maximum_connection = max_connection; };
 	inline ParticleSet* getSPHParticles() { return m_sph_particles; };
 	inline ParticleSet* getDEMParticles() { return m_dem_particles; };
 	inline ParticleSet* getBoundaryParticles() { return m_boundary_particles; };
@@ -59,6 +59,7 @@ public:
 	inline float getParticleRadius() { return m_particle_radius; };
 	inline float getHottestTemperature() { return m_hottest_temperature; };
 	inline float getCoolestTemperature() { return m_coolest_temperature; };
+	inline uint getMaximumConnection() { return m_maximum_connection; };
 
 private:
 	
@@ -109,6 +110,8 @@ private:
 	
 	float m_hottest_temperature;
 	float m_coolest_temperature;
+
+	uint m_maximum_connection;
 
 	double m_update_elased_time;
 };

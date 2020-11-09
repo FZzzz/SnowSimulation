@@ -3921,7 +3921,16 @@ void copy_particle_info(ParticleDeviceData src, ParticleDeviceData dst, uint ind
 	dst.m_d_T[target_index] = src.m_d_T[index];
 	dst.m_d_new_T[target_index] = src.m_d_new_T[index];
 	dst.m_d_trackId[target_index] = src.m_d_trackId[index];
-	//dst.m_d_predicate[target_index] = 1;  //set predicate to 1 so that exclusive scan work correctly
+
+	// copy connect record
+	for (uint i = 0; i < params.maximum_connection; ++i)
+	{
+		const uint src_record_idx = index * params.maximum_connection;
+		const uint target_record_idx = target_index * params.maximum_connection;
+		dst.m_d_connect_record[target_record_idx + i] = src.m_d_connect_record[src_record_idx + i];
+		dst.m_d_connect_length[target_record_idx + i] = src.m_d_connect_length[src_record_idx + i];
+	}
+	dst.m_d_iter_end[target_index] = src.m_d_iter_end[index];
 }
 
 inline __device__
@@ -3945,6 +3954,15 @@ void clean_particle_info(ParticleDeviceData dst, uint target_index)
 	dst.m_d_predicate[target_index] = 0;
 	dst.m_d_trackId[target_index] = 0;
 	dst.m_d_scan_index[target_index] = 0; // <- maybe this doesn't need to update
+
+	//reset refreezing parameters
+	for (uint i = 0; i < params.maximum_connection; ++i)
+	{
+		const uint target_record_idx = target_index * params.maximum_connection;
+		dst.m_d_connect_record[target_record_idx + i] = UINT_MAX;
+		dst.m_d_connect_length[target_record_idx + i] = 0.f;
+	}
+	dst.m_d_iter_end[target_index] = UINT_MAX;
 }
 
 
@@ -4016,7 +4034,16 @@ void freezing(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num
 
 		sph_data.m_d_predicate[index] = 0;
 		sph_data.m_d_trackId[index] = 0;
+
 		dem_data.m_d_predicate[target_index] = 1;
+		// reset refreezing data on dem particles
+		for (uint i = 0; i < params.maximum_connection; ++i)
+		{
+			const uint record_target_index = target_index * params.maximum_connection + i;
+			dem_data.m_d_connect_record[record_target_index] = UINT_MAX;
+			dem_data.m_d_connect_length[record_target_index] = 0.f;
+		}
+		dem_data.m_d_iter_end[target_index] = target_index;
 	}
 }
 
@@ -4400,6 +4427,10 @@ void snow_simulation(
 			correct_dem,
 			sph_sph_correction
 			);
+
+		// refreezing proccess
+		// refreezing();
+
 		
 		apply_correction << <sph_num_blocks, sph_num_threads >> > (
 			sph_particles->m_device_data,

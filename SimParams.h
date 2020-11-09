@@ -19,7 +19,7 @@ struct SimParams
 	float  particle_radius;
 	float  rest_density;
 	float  scorr_coeff;
-	float scorr_divisor;
+	float  scorr_divisor;
 
 	// dem coeffcients
 	float  boundary_damping;
@@ -50,6 +50,10 @@ struct SimParams
 	float spiky;
 	float spiky_G;
 	float viscosity_laplacian;
+
+	// refreezing parameters
+	uint maximum_connection;
+	float k_refreezing;
 };
 
 
