@@ -30,6 +30,8 @@ void ParticleSystem::Initialize()
 
 void ParticleSystem::InitializeCUDA()
 {
+	m_sph_particles->m_maximum_connection = m_maximum_connection;
+	m_dem_particles->m_maximum_connection = m_maximum_connection;
 	GenerateGLBuffers();
 	SetupCUDAMemory();
 	UpdateGLBUfferData();
@@ -249,6 +251,10 @@ void ParticleSystem::SetupCUDAMemory()
 			(void**)&(m_sph_particles->m_device_data.m_d_connect_length),
 			m_maximum_connection* n * sizeof(float)
 		);
+		cudaMalloc(
+			(void**)&(m_sph_particles->m_device_data.m_d_new_index),
+			n * sizeof(uint)
+		);
 
 
 		// Set value
@@ -339,7 +345,7 @@ void ParticleSystem::SetupCUDAMemory()
 		for (uint i = 0; i < m_sph_particles->m_size; ++i) id_vec[i] = id_count, id_count++;
 
 		std::vector<uint> iter_end(n);
-		for (uint i = 0; i < n; ++i) iter_end[i] = (m_maximum_connection * i + 1) - 1;
+		for (uint i = 0; i < n; ++i) iter_end[i] = m_maximum_connection * i;
 
 		cudaMemcpy(
 			(void*)m_sph_particles->m_device_data.m_d_trackId,
@@ -487,6 +493,11 @@ void ParticleSystem::SetupCUDAMemory()
 			m_maximum_connection* n * sizeof(float)
 		);
 
+		cudaMalloc(
+			(void**)&(m_dem_particles->m_device_data.m_d_new_index),
+			n * sizeof(uint)
+		);
+
 		// Set value
 		cudaMemcpy(
 		(void*)m_dem_particles->m_device_data.m_d_predict_positions,
@@ -583,7 +594,7 @@ void ParticleSystem::SetupCUDAMemory()
 		for (uint i = 0; i < m_dem_particles->m_size; ++i) id_vec[i] = id_count, id_count++;
 
 		std::vector<uint> iter_end(n);
-		for (uint i = 0; i < n; ++i) iter_end[i] = (m_maximum_connection * i + 1) - 1;
+		for (uint i = 0; i < n; ++i) iter_end[i] = m_maximum_connection * i;
 
 		cudaMemcpy(
 			(void*)m_dem_particles->m_device_data.m_d_trackId,
@@ -816,15 +827,20 @@ void ParticleSystem::SetupCUDAMemory()
 		// refreezing parameters
 		cudaMalloc(
 			(void**)&(m_buffer_device_data->m_d_connect_record),
-			m_maximum_connection* n * sizeof(uint)
+			(size_t)m_maximum_connection* n * sizeof(uint)
 		);
 		cudaMalloc(
 		(void**)&(m_buffer_device_data->m_d_iter_end),
 			n * sizeof(uint)
-			);
+		);
 		cudaMalloc(
 			(void**)&(m_buffer_device_data->m_d_connect_length),
-			m_maximum_connection* n * sizeof(float)
+			(size_t)m_maximum_connection* n * sizeof(float)
+		);
+
+		cudaMalloc(
+			(void**)&(m_buffer_device_data->m_d_new_index),
+			n * sizeof(uint)
 		);
 
 	}// end of tmp buffer allocation

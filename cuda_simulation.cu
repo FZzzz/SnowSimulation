@@ -3958,13 +3958,12 @@ void clean_particle_info(ParticleDeviceData dst, uint target_index)
 	//reset refreezing parameters
 	for (uint i = 0; i < params.maximum_connection; ++i)
 	{
-		const uint target_record_idx = target_index * params.maximum_connection;
-		dst.m_d_connect_record[target_record_idx + i] = UINT_MAX;
-		dst.m_d_connect_length[target_record_idx + i] = 0.f;
+		const uint target_record_idx = target_index * params.maximum_connection + i;
+		dst.m_d_connect_record[target_record_idx] = UINT_MAX;
+		dst.m_d_connect_length[target_record_idx] = 0.f;
 	}
-	dst.m_d_iter_end[target_index] = UINT_MAX;
+	dst.m_d_iter_end[target_index * params.maximum_connection] = params.maximum_connection * target_index;
 }
-
 
 __device__
 void print_particle_info(ParticleDeviceData data, uint index, const char* str)
@@ -4043,7 +4042,7 @@ void freezing(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num
 			dem_data.m_d_connect_record[record_target_index] = UINT_MAX;
 			dem_data.m_d_connect_length[record_target_index] = 0.f;
 		}
-		dem_data.m_d_iter_end[target_index] = target_index;
+		dem_data.m_d_iter_end[target_index] = params.maximum_connection * target_index;
 	}
 }
 
@@ -4070,8 +4069,13 @@ void scatter(ParticleDeviceData target_data, ParticleDeviceData buffer, uint num
 	if (target_data.m_d_predicate[index] == 1)
 	{
 		uint target_index = target_data.m_d_scan_index[index];
+		if (target_index >= num_particles)
+			printf("Target out of bound: %u\n", target_index);
 		copy_particle_info(buffer, target_data, index, target_index);
+		target_data.m_d_new_index[index] = target_index;
 	}
+	else
+		target_data.m_d_new_index[index] = UINT_MAX;
 }
 
 __global__
@@ -4086,6 +4090,139 @@ void clean_tail(ParticleDeviceData data, uint num_particles)
 	clean_particle_info(data, index);
 
 }
+
+__device__
+void xor_swap(uint* a, uint* b)
+{
+	*a ^= *b;
+	*b ^= *a;
+	*a ^= *b;
+}
+
+__device__
+void swap_float(float& a, float& b)
+{
+	float tmp = a;
+	a = b;
+	b = tmp;
+}
+
+__global__
+void shuffle_useless_record(ParticleDeviceData data, uint num_particles)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= num_particles)
+		return;
+	//check full chunck of record to do the shuffle
+	for (uint i = params.maximum_connection * index; i < data.m_d_iter_end[index]; ++i)
+	{
+		if (data.m_d_predicate[data.m_d_connect_record[i]] == 0)
+		{
+			xor_swap(&data.m_d_connect_record[i], &data.m_d_connect_record[data.m_d_iter_end[index]]);
+			swap_float(data.m_d_connect_length[i], data.m_d_connect_length[data.m_d_iter_end[index]]);
+			data.m_d_iter_end[index]--;
+			if (data.m_d_iter_end[index] >= num_particles)
+				printf("Illegal iter_end at %u %u\n", index, data.m_d_iter_end[index] );
+		}
+	}
+}
+
+// update record index with new index after scatter()
+__global__
+void update_record_index(ParticleDeviceData data, uint record_size)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= record_size)
+		return;
+
+	if (data.m_d_connect_record[index] != UINT_MAX)
+		data.m_d_connect_record[index] = data.m_d_new_index[data.m_d_connect_record[index]];
+
+}
+
+inline __device__
+void connect_and_record_cell(
+	int3 grid_pos, uint sorted_index,
+	uint index0, float3 pos0, float T0,
+	ParticleDeviceData& data,
+	CellData& cell_data)
+{
+	uint grid_hash = calcGridHash(grid_pos);
+
+	// get start of bucket for this cell
+	uint start_index = cell_data.cell_start[grid_hash];
+	float density = 0.0f;
+
+	if (start_index != 0xffffffff)          // cell is not empty
+	{
+		// iterate over particles in this cell
+		uint end_index = cell_data.cell_end[grid_hash];
+
+		for (uint j = start_index; j < end_index; j++)
+		{
+			if (j != sorted_index)                // check not colliding with self
+			{
+				uint original_index = cell_data.grid_index[j];
+
+				float3 pos2 = cell_data.sorted_pos[j];
+				float3 vec = pos0 - pos2;
+				float dist = length(vec);
+
+				// fill in when they are close enough && if the iter_end doesn't exceed the maximum connection
+				if (dist < params.effective_radius
+					&& data.m_d_iter_end[index0] < (index0 + 1) * params.maximum_connection)
+				{
+					const uint record_target_index = data.m_d_iter_end[index0];
+					data.m_d_connect_record[record_target_index] = original_index;
+					data.m_d_connect_length[record_target_index] = dist;
+					data.m_d_iter_end[index0]++;
+				}
+			}
+		}
+	}
+}
+
+// foreach particles fill in the connection record
+__global__
+void connect_and_record_d(ParticleDeviceData data, CellData cell_data, uint num_particles)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= num_particles)
+		return;
+
+	float3 pos = cell_data.sorted_pos[index];
+	uint original_index = cell_data.grid_index[index];
+
+	// get address in grid
+	int3 grid_pos = calcGridPos(pos);
+
+	float T = data.m_d_T[original_index];
+
+	//traverse neighbors and if they are within the effective distance, connect/record them
+	for (int z = -1; z <= 1; z++)
+	{
+		for (int y = -1; y <= 1; y++)
+		{
+			for (int x = -1; x <= 1; x++)
+			{
+				int3 neighbor_pos = grid_pos + make_int3(x, y, z);
+				connect_and_record_cell(neighbor_pos, index, original_index, pos, T, data, cell_data);
+			}
+		}
+	}
+
+}
+
+void connect_and_record(ParticleSet* dem_particles, CellData dem_cell_data)
+{
+	uint num_blocks, num_threads;
+	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
+	connect_and_record_d << <num_blocks, num_threads >> > (dem_particles->m_device_data, dem_cell_data, dem_particles->m_size);
+}
+
 
 template <typename T>
 void print_vec(std::vector<T> vec0, std::vector<T> vec1)
@@ -4168,8 +4305,7 @@ void verification(ParticleSet* sph_particles, ParticleSet* dem_particles)
 void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, ParticleDeviceData buffer)
 {
 	static uint count=0, sph_size=0, dem_size=0;
-	static bool debug_flag = false;
-
+	
 	uint num_threads, num_blocks, full_num_threads, full_num_blocks;
 	uint sph_new_size, dem_new_size;
 	uint full_size = sph_particles->m_full_size;
@@ -4186,13 +4322,15 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	thrust::exclusive_scan(sph_predicate_ptr, sph_predicate_ptr + full_size, sph_scan_ptr, 0u);
 	thrust::exclusive_scan(dem_predicate_ptr, dem_predicate_ptr + full_size, dem_scan_ptr, 0u);
 
-	/*
-	if (debug_flag)
-		printf("Before verification: "),  verification(sph_particles, dem_particles), debug_flag=false;
-	*/
+	// shuffle record data
+	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
+	shuffle_useless_record<<<num_blocks, num_threads>>>(dem_particles->m_device_data, dem_particles->m_size);
+	getLastCudaError("Kernel execution failed: shuffle_useless_record ");
+
 	// copy sph to tmp
 	compute_grid_size(full_size, MAX_THREAD_NUM, full_num_blocks, full_num_threads);
 	copy_to_target << <full_num_blocks, full_num_threads >> > (sph_particles->m_device_data, buffer, full_size);
+	getLastCudaError("Kernel execution failed: copy_to_target ");
 	compute_grid_size(sph_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
 	scatter <<<full_num_blocks, full_num_threads >>> (sph_particles->m_device_data, buffer, full_size);
 	getLastCudaError("Kernel execution failed: scatter ");
@@ -4200,6 +4338,7 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 
 	// copy dem to tmp
 	copy_to_target << <full_num_blocks, full_num_threads >> > (dem_particles->m_device_data, buffer, full_size);
+	getLastCudaError("Kernel execution failed: copy_to_target ");
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
 	scatter <<< full_num_blocks, full_num_threads >>> (dem_particles->m_device_data, buffer, full_size);
 	getLastCudaError("Kernel execution failed: scatter ");
@@ -4232,7 +4371,14 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	clean_tail <<<num_blocks, num_threads>>> (dem_particles->m_device_data, dem_tail_size);
 	getLastCudaError("Kernel execution failed: clean_tail ");
 	cudaDeviceSynchronize();
-	
+
+	uint record_size = dem_particles->m_maximum_connection * dem_particles->m_size;
+	compute_grid_size(
+		record_size,
+		MAX_THREAD_NUM,
+		num_blocks, num_threads);
+	update_record_index<<<num_blocks, num_threads>>>(dem_particles->m_device_data, record_size);
+	getLastCudaError("Kernel execution failed: update_record_index");
 	/*
 	if (sph_size != sph_particles->m_size)
 		printf("(%u)New SPH size: %u\n", count, sph_particles->m_size), sph_size = sph_particles->m_size;
@@ -4276,14 +4422,10 @@ void phase_change(
 	frame_count++;
 }
 
-void compute_mass_scale_factor(
-	ParticleSet* sph_particles,
-	ParticleSet* dem_particles,
-	ParticleSet* b_particles
-)
+
+void solve_snow_interlink_constraint(ParticleSet* dem_particles)
 {
 }
-
 
 void snow_simulation(
 	ParticleSet* sph_particles,
@@ -4357,6 +4499,20 @@ void snow_simulation(
 	if(change_phase)
 		phase_change(sph_particles, dem_particles, *phase_change_buffer, simulate_freezing, simulate_melting);
 
+	sort_and_reorder(
+		dem_particles->m_device_data.m_d_predict_positions,
+		dem_cell_data,
+		dem_particles->m_size
+		);
+
+	sort_and_reorder(
+		sph_particles->m_device_data.m_d_predict_positions,
+		sph_cell_data,
+		sph_particles->m_size
+		);
+
+	// connect solid particles if they are close enough
+	connect_and_record(dem_particles, dem_cell_data);
 
 	integrate_pbd(sph_particles, dt, sph_particles->m_size, cd_on);
 	integrate_pbd(dem_particles, dt, dem_particles->m_size, cd_on);
@@ -4428,9 +4584,8 @@ void snow_simulation(
 			sph_sph_correction
 			);
 
-		// refreezing proccess
-		// refreezing();
-
+		// refreezing proccess (hold the position of particles)
+		//solve_snow_interlink_constraint();
 		
 		apply_correction << <sph_num_blocks, sph_num_threads >> > (
 			sph_particles->m_device_data,

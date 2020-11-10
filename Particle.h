@@ -46,6 +46,7 @@ struct ParticleDeviceData
 	uint* m_d_iter_end;
 	float* m_d_connect_length;
 
+	uint* m_d_new_index; // for remap index (only DEM particles will use this)
 
 	uint*  m_d_trackId;
 };

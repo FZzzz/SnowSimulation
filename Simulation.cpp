@@ -154,7 +154,7 @@ bool Simulation::StepCUDA(float dt)
 	bool sph_sph_correction = false;
 	bool compute_temperature = true;
 	bool change_phase = true;
-	bool simulate_freezing = true;
+	bool simulate_freezing = false;
 	bool simulate_melting = true;
 	//bool compute_wetness = false;
 	bool dem_friction = true;
@@ -624,7 +624,6 @@ void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, 
 		}
 	}
 	//std::cout << "idx " << idx << std::endl;
-
 }
 
 void Simulation::AppendParticleSets()

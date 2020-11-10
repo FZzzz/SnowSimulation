@@ -395,6 +395,8 @@ void ParticleSet::ReleaseDeviceData()
 	if (m_device_data.m_d_connect_record != nullptr) cudaFree(m_device_data.m_d_connect_record);
 	if (m_device_data.m_d_connect_length != nullptr) cudaFree(m_device_data.m_d_connect_length);
 	if (m_device_data.m_d_iter_end != nullptr) cudaFree(m_device_data.m_d_iter_end);
+
+	if (m_device_data.m_d_new_end != nullptr) cudaFree(m_device_data.m_d_new_end);
 	
 
 }
