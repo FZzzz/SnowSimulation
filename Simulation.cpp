@@ -329,7 +329,7 @@ void Simulation::SetupSimParams()
 	effective_radius = powf(((3.0f * m_volume) / (4.0f * M_PI)), 1.0f / 3.0f);
 	particle_radius = powf((M_PI / (6.0f * n_kernel_particles)), 1.0f / 3.0f) * effective_radius;
 
-	m_particle_system->setMaximumConnection(20);
+	m_particle_system->setMaximumConnection(5);
 
 	std::cout << "Particle mass: " << particle_mass << std::endl;
 	std::cout << "Effective radius: " << effective_radius << std::endl;
@@ -341,7 +341,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->gravity = make_float3(0.f, -9.8f, 0.f);
 	m_sim_params->global_damping = 1.0;
 	m_sim_params->maximum_speed = 3.f;
-	m_sim_params->minimum_speed = 0.0005f * particle_radius * m_dt;
+	m_sim_params->minimum_speed = 0.00f;// 01f * particle_radius * m_dt * m_dt;
 
 	m_sim_params->particle_radius = particle_radius;
 	m_sim_params->effective_radius = effective_radius;
@@ -384,7 +384,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->scorr_divisor = SPHKernel::Poly6_W(0.3f * effective_radius, effective_radius);
 
 	m_sim_params->maximum_connection = m_particle_system->getMaximumConnection();
-	m_sim_params->k_refreezing = 1.f; // PBD based stiffness (better with XPBD (haven't impelment yet))
+	m_sim_params->k_refreezing = 0.01f; // PBD based stiffness (better with XPBD (haven't impelment yet))
 
 	m_particle_system->setParticleRadius(particle_radius);
 

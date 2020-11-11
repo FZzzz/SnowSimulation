@@ -3925,10 +3925,10 @@ void copy_particle_info(ParticleDeviceData src, ParticleDeviceData dst, uint ind
 	// copy connect record
 	for (uint i = 0; i < params.maximum_connection; ++i)
 	{
-		const uint src_record_idx = index * params.maximum_connection;
-		const uint target_record_idx = target_index * params.maximum_connection;
-		dst.m_d_connect_record[target_record_idx + i] = src.m_d_connect_record[src_record_idx + i];
-		dst.m_d_connect_length[target_record_idx + i] = src.m_d_connect_length[src_record_idx + i];
+		const uint src_record_idx = index * params.maximum_connection + i;
+		const uint target_record_idx = target_index * params.maximum_connection + i;
+		dst.m_d_connect_record[target_record_idx] = src.m_d_connect_record[src_record_idx];
+		dst.m_d_connect_length[target_record_idx] = src.m_d_connect_length[src_record_idx];
 	}
 	dst.m_d_iter_end[target_index] = src.m_d_iter_end[index];
 }
@@ -3962,7 +3962,7 @@ void clean_particle_info(ParticleDeviceData dst, uint target_index)
 		dst.m_d_connect_record[target_record_idx] = UINT_MAX;
 		dst.m_d_connect_length[target_record_idx] = 0.f;
 	}
-	dst.m_d_iter_end[target_index * params.maximum_connection] = params.maximum_connection * target_index;
+	dst.m_d_iter_end[target_index] = params.maximum_connection * target_index;
 }
 
 __device__
@@ -4004,9 +4004,8 @@ void melting(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_
 		//print_particle_info(dem_data, index, "DEM(After)");
 		//print_particle_info(sph_data, target_index, "SPH");
 
-		dem_data.m_d_predicate[index] = 0;
-		//set track id to 0 => not using
-		dem_data.m_d_trackId[index] = 0; 
+		dem_data.m_d_predicate[index] = 0; 
+		dem_data.m_d_trackId[index] = 0; 	//set track id to 0 => not using
 		sph_data.m_d_predicate[target_index] = 1;
 	}
 }
@@ -4117,13 +4116,37 @@ void shuffle_useless_record(ParticleDeviceData data, uint num_particles)
 	//check full chunck of record to do the shuffle
 	for (uint i = params.maximum_connection * index; i < data.m_d_iter_end[index]; ++i)
 	{
-		if (data.m_d_predicate[data.m_d_connect_record[i]] == 0)
+		if (data.m_d_connect_record[i] < num_particles && data.m_d_predicate[data.m_d_connect_record[i]] == 0)
 		{
-			xor_swap(&data.m_d_connect_record[i], &data.m_d_connect_record[data.m_d_iter_end[index]]);
-			swap_float(data.m_d_connect_length[i], data.m_d_connect_length[data.m_d_iter_end[index]]);
+			data.m_d_connect_record[i] = UINT_MAX; // mark as not using
+			data.m_d_connect_length[i] = 0.f;
 			data.m_d_iter_end[index]--;
-			if (data.m_d_iter_end[index] >= num_particles)
-				printf("Illegal iter_end at %u %u\n", index, data.m_d_iter_end[index] );
+			/*
+			printf("Pred[%u] Swap at %u(%u), iter_end: %u\n", data.m_d_connect_record[i], i, index, data.m_d_iter_end[index]);
+			for (uint j = params.maximum_connection * index; j < params.maximum_connection * (index + 1); ++j)
+			{
+				printf("%u(%u) ", data.m_d_connect_record[j], j);
+			}
+			printf("\n");
+
+			//uint tmp_u = data.m_d_connect_record[i]; 
+			data.m_d_connect_record[i] = data.m_d_connect_record[data.m_d_iter_end[index]-1]; 
+			data.m_d_connect_record[data.m_d_iter_end[index]-1] = UINT_MAX;
+
+			//float tmp_f = data.m_d_connect_length[i];
+			data.m_d_connect_length[i] = data.m_d_connect_length[data.m_d_iter_end[index]-1];
+			data.m_d_connect_length[data.m_d_iter_end[index]-1] = 0.f;
+
+			for (uint j = params.maximum_connection * index; j < params.maximum_connection * (index + 1); ++j)
+			{
+				printf("%u(%u) ", data.m_d_connect_record[j], j);
+			}
+			printf("\n");
+
+			//xor_swap(&data.m_d_connect_record[i], &data.m_d_connect_record[data.m_d_iter_end[index]]);
+			//swap_float(data.m_d_connect_length[i], data.m_d_connect_length[data.m_d_iter_end[index]]);
+			data.m_d_iter_end[index]--;
+			*/
 		}
 	}
 }
@@ -4175,9 +4198,20 @@ void connect_and_record_cell(
 					&& data.m_d_iter_end[index0] < (index0 + 1) * params.maximum_connection)
 				{
 					const uint record_target_index = data.m_d_iter_end[index0];
-					data.m_d_connect_record[record_target_index] = original_index;
-					data.m_d_connect_length[record_target_index] = dist;
-					data.m_d_iter_end[index0]++;
+					// find out available space and fill
+					for (uint idx = params.maximum_connection * index0; idx < params.maximum_connection * (index0 + 1); ++idx)
+					{
+						if (data.m_d_connect_record[idx] == UINT_MAX)
+						{
+							data.m_d_connect_record[idx] = original_index;
+							data.m_d_connect_length[idx] = dist;
+							data.m_d_iter_end[index0]++;
+							break;
+						}
+					}
+					//data.m_d_connect_record[record_target_index] = original_index;
+					//data.m_d_connect_length[record_target_index] = dist;
+					//data.m_d_iter_end[index0]++;
 				}
 			}
 		}
@@ -4221,6 +4255,7 @@ void connect_and_record(ParticleSet* dem_particles, CellData dem_cell_data)
 	uint num_blocks, num_threads;
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
 	connect_and_record_d << <num_blocks, num_threads >> > (dem_particles->m_device_data, dem_cell_data, dem_particles->m_size);
+	getLastCudaError("Kernel execution failed: connect_and_record_d ");
 }
 
 
@@ -4337,6 +4372,7 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	cudaDeviceSynchronize();
 
 	// copy dem to tmp
+	//printf("full_size: %u\n", full_size);
 	copy_to_target << <full_num_blocks, full_num_threads >> > (dem_particles->m_device_data, buffer, full_size);
 	getLastCudaError("Kernel execution failed: copy_to_target ");
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
@@ -4422,9 +4458,60 @@ void phase_change(
 	frame_count++;
 }
 
+inline __device__
+float3 compute_interlink_correction(ParticleDeviceData& data, uint index0, uint index1, float connect_length)
+{
+	if (index0 == index1)
+		printf("Invalid computation (compute_interlink_correction)\n");
+	float3 result = make_float3(0, 0, 0);
+	const float3 pos0 = data.m_d_predict_positions[index0];
+	const float3 pos1 = data.m_d_predict_positions[index1];
+	const float3 v = pos0 - pos1;
+	float dist = length(v);
+
+	// always corrects (equality constraint)
+	const float w0 = data.m_d_massInv[index0];
+	const float w1 = data.m_d_massInv[index1];
+
+	const float w_sum = w0 + w1;
+	const float C = dist - connect_length;
+
+	float3 n = v / (dist + params.pbd_epsilon);
+
+	result = params.k_refreezing * -w0 * (1.f / w_sum) * C * n;
+
+	return result;
+}
+
+
+__global__
+void solve_snow_interlink_constraint_d(ParticleDeviceData data, uint num_particles)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= num_particles)
+		return;
+
+	// get address in grid
+	float3 corr = make_float3(0, 0, 0);
+
+	// traverse record to compute interlink correction
+	for (uint i = params.maximum_connection * index; i < params.maximum_connection * (index + 1); ++i)
+	{
+		if(data.m_d_connect_record[i] != UINT_MAX)
+			corr += compute_interlink_correction(data, index, data.m_d_connect_record[i], data.m_d_connect_length[i]);
+	}
+	
+	// write back this correction to data
+	data.m_d_correction[index] += corr;
+}
+
 
 void solve_snow_interlink_constraint(ParticleSet* dem_particles)
 {
+	uint num_blocks, num_threads;
+	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
+	solve_snow_interlink_constraint_d << <num_blocks, num_threads >> > (dem_particles->m_device_data, dem_particles->m_size);
 }
 
 void snow_simulation(
@@ -4585,7 +4672,7 @@ void snow_simulation(
 			);
 
 		// refreezing proccess (hold the position of particles)
-		//solve_snow_interlink_constraint();
+		solve_snow_interlink_constraint(dem_particles);
 		
 		apply_correction << <sph_num_blocks, sph_num_threads >> > (
 			sph_particles->m_device_data,
