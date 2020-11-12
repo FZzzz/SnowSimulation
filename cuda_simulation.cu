@@ -4187,23 +4187,35 @@ void connect_and_record_cell(
 		{
 			if (j != sorted_index)                // check not colliding with self
 			{
-				uint original_index = cell_data.grid_index[j];
+				uint index1 = cell_data.grid_index[j];
 
-				float3 pos2 = cell_data.sorted_pos[j];
-				float3 vec = pos0 - pos2;
+				float3 pos1 = cell_data.sorted_pos[j];
+				float3 vec = pos0 - pos1;
 				float dist = length(vec);
 
 				// fill in when they are close enough && if the iter_end doesn't exceed the maximum connection
 				if (dist < params.effective_radius
 					&& data.m_d_iter_end[index0] < (index0 + 1) * params.maximum_connection)
 				{
-					const uint record_target_index = data.m_d_iter_end[index0];
+					//const uint record_target_index = data.m_d_iter_end[index0];
+					uint record_start_index1 = params.maximum_connection * index1;
+
+					// find if repeated 
+					for (uint idx = params.maximum_connection * index0; idx < params.maximum_connection * (index0 + 1); ++idx)
+					{
+						// already filled
+						if (data.m_d_connect_record[idx] == index1)
+							return;
+					}
+
 					// find out available space and fill
 					for (uint idx = params.maximum_connection * index0; idx < params.maximum_connection * (index0 + 1); ++idx)
 					{
-						if (data.m_d_connect_record[idx] == UINT_MAX)
+						// if record in this index (index0) is available and the record of filling target (index1) is available
+						// atomicCAS ==> (old == compare ? val : old) and returns `old`
+						if (atomicCAS(&data.m_d_connect_record[idx], UINT_MAX, index1)  == UINT_MAX)
 						{
-							data.m_d_connect_record[idx] = original_index;
+							//data.m_d_connect_record[idx] = index1;
 							data.m_d_connect_length[idx] = dist;
 							data.m_d_iter_end[index0]++;
 							break;

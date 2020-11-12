@@ -329,7 +329,8 @@ void Simulation::SetupSimParams()
 	effective_radius = powf(((3.0f * m_volume) / (4.0f * M_PI)), 1.0f / 3.0f);
 	particle_radius = powf((M_PI / (6.0f * n_kernel_particles)), 1.0f / 3.0f) * effective_radius;
 
-	m_particle_system->setMaximumConnection(5);
+	/*Maximum interlink connections*/
+	m_particle_system->setMaximumConnection(20);
 
 	std::cout << "Particle mass: " << particle_mass << std::endl;
 	std::cout << "Effective radius: " << effective_radius << std::endl;
