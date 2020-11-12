@@ -4203,21 +4203,45 @@ void connect_and_record_cell(
 					// find if repeated 
 					for (uint idx = params.maximum_connection * index0; idx < params.maximum_connection * (index0 + 1); ++idx)
 					{
-						// already filled
+						// return if filled
 						if (data.m_d_connect_record[idx] == index1)
 							return;
 					}
 
-					// find out available space and fill
+					// locate available space and fill
 					for (uint idx = params.maximum_connection * index0; idx < params.maximum_connection * (index0 + 1); ++idx)
 					{
 						// if record in this index (index0) is available and the record of filling target (index1) is available
 						// atomicCAS ==> (old == compare ? val : old) and returns `old`
 						if (atomicCAS(&data.m_d_connect_record[idx], UINT_MAX, index1)  == UINT_MAX)
 						{
-							//data.m_d_connect_record[idx] = index1;
-							data.m_d_connect_length[idx] = dist;
-							data.m_d_iter_end[index0]++;
+							bool valid = false;
+							// search and fill in index1's record to prevent one-way condition
+							if (data.m_d_iter_end[index1] < (index1 + 1) * params.maximum_connection)
+							{
+								// locate avaible space at index1's record and fill
+								for (uint idx_j = index1 * params.maximum_connection; idx_j < (index1 + 1) * params.maximum_connection; ++idx_j)
+								{
+									if (atomicCAS(&data.m_d_connect_record[idx_j], UINT_MAX, index0) == UINT_MAX)
+									{
+										data.m_d_connect_length[idx_j] = dist;
+										atomicAdd(&data.m_d_iter_end[index1], 1u);
+										valid = true;
+										break;
+									}
+								}
+							}
+							if (valid)
+							{
+								//data.m_d_connect_record[idx] = index1;
+								data.m_d_connect_length[idx] = dist;
+								atomicAdd(&data.m_d_iter_end[index0], 1u);
+
+							}
+							else
+							{
+								atomicExch(&data.m_d_connect_record[idx], UINT_MAX); // reset record index if invalid
+							}
 							break;
 						}
 					}
