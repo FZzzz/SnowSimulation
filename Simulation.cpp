@@ -154,7 +154,7 @@ bool Simulation::StepCUDA(float dt)
 	bool sph_sph_correction = false;
 	bool compute_temperature = true;
 	bool change_phase = true;
-	bool simulate_freezing = false;
+	bool simulate_freezing = true;
 	bool simulate_melting = true;
 	//bool compute_wetness = false;
 	bool dem_friction = true;
@@ -330,7 +330,7 @@ void Simulation::SetupSimParams()
 	particle_radius = powf((M_PI / (6.0f * n_kernel_particles)), 1.0f / 3.0f) * effective_radius;
 
 	/*Maximum interlink connections*/
-	m_particle_system->setMaximumConnection(5);
+	m_particle_system->setMaximumConnection(20);
 
 	std::cout << "Particle mass: " << particle_mass << std::endl;
 	std::cout << "Effective radius: " << effective_radius << std::endl;
@@ -386,7 +386,7 @@ void Simulation::SetupSimParams()
 
 	m_sim_params->maximum_connection = m_particle_system->getMaximumConnection();
 	m_sim_params->k_refreezing = 0.01f; // PBD based stiffness (better with XPBD (haven't impelment yet))
-
+	m_sim_params->break_threshold = 1.1f;
 	m_particle_system->setParticleRadius(particle_radius);
 
 	set_sim_params(m_sim_params);

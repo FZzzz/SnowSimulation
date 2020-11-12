@@ -4205,7 +4205,35 @@ void connect_and_record_cell(
 					{
 						// return if filled
 						if (data.m_d_connect_record[idx] == index1)
+						{
+							/*
+							//delete when the distance is too long
+							if (dist > params.break_threshold * data.m_d_connect_length[idx])
+							{
+								// delete at idx
+								// use atomicCAS to ensure it is not double deleted
+								if (atomicCAS(&data.m_d_connect_record[idx], index1, UINT_MAX) == index1)
+								{
+									// will someone access here?
+									data.m_d_connect_length[idx] = 0.f;
+									atomicSub(&data.m_d_iter_end[index0], 1u);
+								}
+								
+								// delete at the other side
+								for (uint idx_j = index1 * params.maximum_connection; idx_j < (index1 + 1) * params.maximum_connection; ++idx_j)
+								{
+									if (atomicCAS(&data.m_d_connect_record[idx_j], index0, UINT_MAX) == index0)
+									{
+										data.m_d_connect_length[idx_j] = 0.f;
+										atomicSub(&data.m_d_iter_end[index1], 1u);
+										break;
+									}
+								}
+							}
+							*/
+
 							return;
+						}
 					}
 
 					// locate available space and fill
@@ -4504,6 +4532,9 @@ float3 compute_interlink_correction(ParticleDeviceData& data, uint index0, uint 
 	const float3 pos1 = data.m_d_predict_positions[index1];
 	const float3 v = pos0 - pos1;
 	float dist = length(v);
+
+	if (dist > params.break_threshold * connect_length)
+		return result;
 
 	// always corrects (equality constraint)
 	const float w0 = data.m_d_massInv[index0];
