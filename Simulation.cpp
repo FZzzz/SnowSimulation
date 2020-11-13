@@ -161,7 +161,7 @@ bool Simulation::StepCUDA(float dt)
 	bool dem_viscosity = true;
 
 	bool use_interlink = true;
-	bool dynamic_connections = false;
+	bool dynamic_connections = true;
 
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 

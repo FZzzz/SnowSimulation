@@ -4726,13 +4726,14 @@ void snow_simulation(
 		sph_particles->m_size
 		);
 
-	// compute current acceptable number of connections
-	if(use_interlink && dynamic_max_connections)
-		adjust_connections(dem_particles);
-
 	// connect solid particles if they are close enough
 	if(use_interlink)
 		connect_and_record(dem_particles, dem_cell_data, dynamic_max_connections);
+
+	// compute current acceptable number of connections
+	if (use_interlink && dynamic_max_connections)
+		adjust_connections(dem_particles);
+
 
 	integrate_pbd(sph_particles, dt, sph_particles->m_size, cd_on);
 	integrate_pbd(dem_particles, dt, dem_particles->m_size, cd_on);
