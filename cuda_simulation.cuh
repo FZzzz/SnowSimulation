@@ -68,6 +68,8 @@ void snow_simulation(
     bool         simulate_freezing,
     bool         simulate_melting,
     bool         dem_viscosity,
+    bool         use_interlink,
+    bool         dynamic_max_connections,
     bool         cd_on
 );
 

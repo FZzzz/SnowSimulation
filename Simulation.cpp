@@ -160,6 +160,9 @@ bool Simulation::StepCUDA(float dt)
 	bool dem_friction = true;
 	bool dem_viscosity = true;
 
+	bool use_interlink = true;
+	bool dynamic_connections = false;
+
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 
 	ParticleSet* sph_particles = m_particle_system->getSPHParticles();
@@ -212,6 +215,8 @@ bool Simulation::StepCUDA(float dt)
 		simulate_freezing,
 		simulate_melting,
 		dem_viscosity,
+		use_interlink,
+		dynamic_connections,
 		cd_on
 		);
 
@@ -373,6 +378,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->k_snow = 25.f;
 	m_sim_params->k_water = 6.f;
 	m_sim_params->freezing_point = 0.f;
+	m_sim_params->T_homogeneous = -5.0f;
 
 	m_sim_params->blending_speed = 0.001f;
 

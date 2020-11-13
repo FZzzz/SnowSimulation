@@ -4114,7 +4114,7 @@ void shuffle_useless_record(ParticleDeviceData data, uint num_particles)
 	if (index >= num_particles)
 		return;
 	//check full chunck of record to do the shuffle
-	for (uint i = params.maximum_connection * index; i < data.m_d_iter_end[index]; ++i)
+	for (uint i = params.maximum_connection * index; i < (index+1)*params.maximum_connection; ++i)
 	{
 		if (data.m_d_connect_record[i] < num_particles && data.m_d_predicate[data.m_d_connect_record[i]] == 0)
 		{
@@ -4170,7 +4170,8 @@ void connect_and_record_cell(
 	int3 grid_pos, uint sorted_index,
 	uint index0, float3 pos0, float T0,
 	ParticleDeviceData& data,
-	CellData& cell_data)
+	CellData& cell_data,
+	bool dynamic_max_connections)
 {
 	uint grid_hash = calcGridHash(grid_pos);
 
@@ -4193,9 +4194,16 @@ void connect_and_record_cell(
 				float3 vec = pos0 - pos1;
 				float dist = length(vec);
 
+				uint connection_count = data.m_d_iter_end[index0] - (index0 * params.maximum_connection);
+				uint count_tolerance = (dynamic_max_connections)
+										? (data.m_d_T[index0] - params.freezing_point) / (params.T_homogeneous - params.freezing_point) * params.maximum_connection 
+										: index0 * params.maximum_connection;
+					
+
 				// fill in when they are close enough && if the iter_end doesn't exceed the maximum connection
 				if (dist < params.effective_radius
-					&& data.m_d_iter_end[index0] < (index0 + 1) * params.maximum_connection)
+					&& connection_count < count_tolerance)
+					//&& data.m_d_iter_end[index0] < (index0 + 1) * params.maximum_connection)
 				{
 					//const uint record_target_index = data.m_d_iter_end[index0];
 					uint record_start_index1 = params.maximum_connection * index1;
@@ -4284,7 +4292,7 @@ void connect_and_record_cell(
 
 // foreach particles fill in the connection record
 __global__
-void connect_and_record_d(ParticleDeviceData data, CellData cell_data, uint num_particles)
+void connect_and_record_d(ParticleDeviceData data, CellData cell_data, uint num_particles, bool dynamic_max_connections)
 {
 	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
 
@@ -4307,18 +4315,18 @@ void connect_and_record_d(ParticleDeviceData data, CellData cell_data, uint num_
 			for (int x = -1; x <= 1; x++)
 			{
 				int3 neighbor_pos = grid_pos + make_int3(x, y, z);
-				connect_and_record_cell(neighbor_pos, index, original_index, pos, T, data, cell_data);
+				connect_and_record_cell(neighbor_pos, index, original_index, pos, T, data, cell_data, dynamic_max_connections);
 			}
 		}
 	}
 
 }
 
-void connect_and_record(ParticleSet* dem_particles, CellData dem_cell_data)
+void connect_and_record(ParticleSet* dem_particles, CellData dem_cell_data, bool dynamic_max_connections)
 {
 	uint num_blocks, num_threads;
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	connect_and_record_d << <num_blocks, num_threads >> > (dem_particles->m_device_data, dem_cell_data, dem_particles->m_size);
+	connect_and_record_d << <num_blocks, num_threads >> > (dem_particles->m_device_data, dem_cell_data, dem_particles->m_size, dynamic_max_connections);
 	getLastCudaError("Kernel execution failed: connect_and_record_d ");
 }
 
@@ -4526,7 +4534,11 @@ inline __device__
 float3 compute_interlink_correction(ParticleDeviceData& data, uint index0, uint index1, float connect_length)
 {
 	if (index0 == index1)
-		printf("Invalid computation (compute_interlink_correction)\n");
+	{
+		printf("Invalid computation at index: %u (compute_interlink_correction)\n", index0);
+		return;
+	}
+		
 	float3 result = make_float3(0, 0, 0);
 	const float3 pos0 = data.m_d_predict_positions[index0];
 	const float3 pos1 = data.m_d_predict_positions[index1];
@@ -4573,12 +4585,59 @@ void solve_snow_interlink_constraint_d(ParticleDeviceData data, uint num_particl
 	data.m_d_correction[index] += corr;
 }
 
+// for each particle adjust its connection to fit current maximum connections
+__global__
+void adjust_connections_d(ParticleDeviceData data, uint num_particles)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+	if (index >= num_particles)
+		return;
+	
+	uint T = data.m_d_T[index];
+
+	uint count = 0;
+	uint current_max_connection = (uint)( ((T - params.freezing_point) / 
+											(params.T_homogeneous - params.freezing_point)) 
+											* params.maximum_connection);
+	// traverse whole record
+	for (uint i = params.maximum_connection * index; i < params.maximum_connection * (index + 1); ++i)
+	{
+		count = (data.m_d_connect_record[i] != UINT_MAX) ? count + 1: count; 
+		if (count > current_max_connection)
+		{
+			// delete record on this index
+			uint index1 = atomicExch(&data.m_d_connect_record[i], UINT_MAX);
+			data.m_d_connect_length[i] = 0.f;
+			atomicSub(&data.m_d_iter_end[index], 1u);
+
+			// remove record on the opposite index
+			for (uint j = params.maximum_connection * index1; j < params.maximum_connection * (index1 + 1); ++j)
+			{
+				if (atomicCAS(&data.m_d_connect_record[j], index, UINT_MAX) == index)
+				{
+					data.m_d_connect_length[j] = 0.f;
+					atomicSub(&data.m_d_iter_end[index1], 1u);
+				}
+			}
+		}
+	}
+}
+
+void adjust_connections(ParticleSet* dem_particles)
+{
+	uint num_blocks, num_threads;
+	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
+	adjust_connections_d <<<num_blocks, num_threads>>>(dem_particles->m_device_data, dem_particles->m_size);
+	getLastCudaError("Kernel execution failed: adjust_connections_d ");
+}
+
 
 void solve_snow_interlink_constraint(ParticleSet* dem_particles)
 {
 	uint num_blocks, num_threads;
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
 	solve_snow_interlink_constraint_d << <num_blocks, num_threads >> > (dem_particles->m_device_data, dem_particles->m_size);
+	getLastCudaError("Kernel execution failed: solve_snow_interlink_constraint_d ");
 }
 
 void snow_simulation(
@@ -4600,6 +4659,8 @@ void snow_simulation(
 	bool simulate_freezing,
 	bool simulate_melting,
 	bool dem_viscosity,
+	bool use_interlink,
+	bool dynamic_max_connections,
 	bool cd_on
 )
 {
@@ -4665,8 +4726,13 @@ void snow_simulation(
 		sph_particles->m_size
 		);
 
+	// compute current acceptable number of connections
+	if(use_interlink && dynamic_max_connections)
+		adjust_connections(dem_particles);
+
 	// connect solid particles if they are close enough
-	connect_and_record(dem_particles, dem_cell_data);
+	if(use_interlink)
+		connect_and_record(dem_particles, dem_cell_data, dynamic_max_connections);
 
 	integrate_pbd(sph_particles, dt, sph_particles->m_size, cd_on);
 	integrate_pbd(dem_particles, dt, dem_particles->m_size, cd_on);
@@ -4739,7 +4805,8 @@ void snow_simulation(
 			);
 
 		// refreezing proccess (hold the position of particles)
-		solve_snow_interlink_constraint(dem_particles);
+		if(use_interlink)
+			solve_snow_interlink_constraint(dem_particles);
 		
 		apply_correction << <sph_num_blocks, sph_num_threads >> > (
 			sph_particles->m_device_data,

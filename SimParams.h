@@ -53,6 +53,7 @@ struct SimParams
 
 	// refreezing parameters
 	uint maximum_connection;
+	float T_homogeneous;
 	float k_refreezing;
 
 	float break_threshold;
