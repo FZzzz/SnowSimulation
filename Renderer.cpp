@@ -30,6 +30,26 @@ void Renderer::Initialize(
 	m_mainCamera = camera;
 	m_viewport_width = viewport_width;
 	m_viewport_height = viewport_height;
+
+	InitializeDepthBuffers();
+}
+
+void Renderer::InitializeDepthBuffers()
+{
+	glGenFramebuffers(1, &m_depth_map_fbo);
+	glGenTextures(1, &m_depth_map);
+	glBindTexture(GL_TEXTURE_2D, m_depth_map);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
+		m_viewport_width, m_viewport_height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glBindFramebuffer(GL_FRAMEBUFFER, m_depth_map_fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_depth_map, 0);
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void Renderer::ClearBuffer()
@@ -43,7 +63,9 @@ void Renderer::Render()
 	ClearBuffer();
 	glViewport(0, 0, m_viewport_width, m_viewport_height);
 	//RenderObjects();
-	RenderParticles();
+	RenderFluidDepth();
+	SmoothDepth();
+	//RenderParticles();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -258,4 +280,55 @@ void Renderer::RenderGameObject(const std::shared_ptr<Shader>& shader, const std
 		GL_UNSIGNED_INT,
 		0);
 	glBindVertexArray(0);
+}
+
+void Renderer::RenderFluidDepth()
+{
+	const std::shared_ptr<Shader> shader = m_resource_manager->FindShaderByName("PointDepth");
+	
+	const glm::mat4 pvm = m_mainCamera->m_cameraMat * glm::mat4(1);
+	glm::mat4 model_view = m_mainCamera->m_lookAt * glm::mat4(1);
+	
+	shader->SetUniformMat4("pvm", pvm);
+	shader->SetUniformFloat("point_size", 30.f);
+	shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
+	shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
+	shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
+	shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 1.f));
+	shader->SetUniformMat4("model_view", model_view);
+	shader->SetUniformMat4("projection", m_mainCamera->m_projection);
+	shader->SetUniformFloat("sphere_radius", m_particle_system->getParticleRadius());
+	
+	//shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
+	//shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
+	//shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
+
+
+	if (m_sph_visibility)
+	{
+		// fluid particles
+		const ParticleSet* const particles = m_particle_system->getSPHParticles();
+
+#ifdef _DEBUG
+		assert(shader);
+#endif
+		shader->Use();
+		//point_shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 1.f));
+		glBindVertexArray(m_particle_system->getSPH_VAO());
+		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getSPH_VBO_0());
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_particle_system->getEBO());
+
+		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getSPH_VBO_1());
+		glEnableVertexAttribArray(1);
+		glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
+
+		glDrawArrays(GL_POINTS, 0, m_particle_system->getSPHParticles()->m_size);
+
+		glBindVertexArray(0);
+	}
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 }

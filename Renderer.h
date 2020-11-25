@@ -20,7 +20,7 @@ public:
 		std::shared_ptr<Camera> camera,
 		int viewport_width, int viewport_height
 	);
-		
+
 	void Render();
 
 	void SwitchSphVisibility();
@@ -33,6 +33,8 @@ public:
 	void setClearColor(glm::vec4 clear_color);
 
 private:
+
+	void InitializeDepthBuffers();
 
 	void ClearBuffer();
 
@@ -47,6 +49,9 @@ private:
 		const std::shared_ptr<Mesh>& mesh,
 		const Transform& transform);
 
+	void RenderFluidDepth();
+	void SmoothDepth();
+
 	std::shared_ptr<Camera> m_mainCamera;
 	std::shared_ptr<ResourceManager> m_resource_manager;
 	std::shared_ptr<ParticleSystem> m_particle_system;
@@ -55,6 +60,9 @@ private:
 	GLsizei m_viewport_height;
 
 	GLuint m_ubo;
+
+	GLuint m_depth_map;
+	GLuint m_depth_map_fbo;
 
 	glm::vec4 m_clear_color;
 
