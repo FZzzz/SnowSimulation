@@ -13,7 +13,7 @@ out vec4 frag_color;
 float LinearizeDepth(float depth)
 {
     const float near_plane = 0.01f;
-    const float far_plane = 30.f;
+    const float far_plane = 2.f;
     float z = depth * 2.0 - 1.0; // Back to NDC 
     return (2.0 * near_plane * far_plane) / (far_plane + near_plane - z * (far_plane - near_plane));	
 }
@@ -37,9 +37,9 @@ void main()
     vec4 pixel_pos =  vec4(eye_space_pos + n * sphere_radius, 1.0f);
     vec4 clip_space_pos = projection * pixel_pos;
    
-    gl_FragDepth = (clip_space_pos.z / clip_space_pos.w) * 0.5f + 0.5f;
+    gl_FragDepth = (clip_space_pos.z / clip_space_pos.w);// * 0.5f + 0.5f;
 
-    frag_color = vec4(vec3(LinearizeDepth(gl_FragDepth) / 30.f), 1.0);
+    frag_color = vec4(vec3(LinearizeDepth(gl_FragDepth) / 2.f), 1.0);
     //frag_color.xyz = diffuse * vertex_point_color;
     //frag_color.w = 1.f;
 

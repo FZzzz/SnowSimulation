@@ -425,6 +425,15 @@ void Shader::SetUniformMat4(const std::string & name, const glm::mat4 & mat)
 	glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(mat));
 }
 
+void Shader::SetUniformVec2(const std::string& name, const glm::vec2& v)
+{
+	GLint loc = glGetUniformLocation(m_program, name.c_str());
+	if (loc == -1)
+		return;
+
+	glUniform2fv(loc, 1, glm::value_ptr(v));
+}
+
 void Shader::SetUniformVec3(const std::string & name, const glm::vec3 & vec)
 {
 	GLint loc = glGetUniformLocation(m_program, name.c_str());

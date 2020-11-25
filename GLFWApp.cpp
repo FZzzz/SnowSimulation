@@ -142,6 +142,9 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	point_depth_shader->SetupShader("resources/shader/point_depth_vs.glsl",
 		"resources/shader/point_depth_fs.glsl");
 	
+	std::shared_ptr<Shader> depth_smooth_shader = std::make_shared<Shader>("DepthSmooth");
+	depth_smooth_shader->SetupShader("resources/shader/bilateral_vs.glsl",
+		"resources/shader/bilateral_fs.glsl");
 
 
 	auto mat_uniform = glGetUniformBlockIndex(shadow_mapping_shader->getProgram(), "Matrices");
@@ -336,6 +339,13 @@ void Key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		{
 			auto renderer = instance->getRenderer();
 			renderer->SwitchBoundaryVisibility();
+			break;
+		}
+
+		case GLFW_KEY_P:
+		{			
+			auto renderer = instance->getRenderer();
+			renderer->SwitchDepthSmooth();
 			break;
 		}
 		}

@@ -27,6 +27,7 @@ public:
 	void SwitchDEMVisibility();
 	void SwitchBoundaryVisibility();
 	void SwitchTemperatureShader();
+	void SwitchDepthSmooth();
 
 	// setters
 	void setMainCamera(std::shared_ptr<Camera> camera);
@@ -63,12 +64,22 @@ private:
 
 	GLuint m_depth_map;
 	GLuint m_depth_map_fbo;
+	GLuint m_depth_smooth_fbo;
+
+	GLuint m_screen_vao;
+	GLuint m_screen_vbo;
+
+	glm::vec2 m_screen_size;
+	glm::vec2 m_blur_dirX;
+	glm::vec2 m_blur_dirY;
 
 	glm::vec4 m_clear_color;
 
-	bool m_sph_visibility;
-	bool m_dem_visibility;
-	bool m_boundary_visibility;
+
+	bool m_b_sph_visibility;
+	bool m_b_dem_visibility;
+	bool m_b_boundary_visibility;
+	bool m_b_smooth_depth;
 
 	bool m_use_temperature_shader;
 

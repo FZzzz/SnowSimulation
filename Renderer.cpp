@@ -8,9 +8,10 @@ Renderer::Renderer() :
 	m_viewport_height(900),
 	m_clear_color(0.15f, 0.15f, 0.15f, 0),
 	m_ubo(-1),
-	m_sph_visibility(true),
-	m_dem_visibility(true),
-	m_boundary_visibility(false),
+	m_b_sph_visibility(true),
+	m_b_dem_visibility(true),
+	m_b_boundary_visibility(false),
+	m_b_smooth_depth(false),
 	m_use_temperature_shader(false)
 {
 }
@@ -31,6 +32,11 @@ void Renderer::Initialize(
 	m_viewport_width = viewport_width;
 	m_viewport_height = viewport_height;
 
+	m_screen_size = glm::vec2(viewport_width, viewport_height);
+
+	m_blur_dirX = glm::vec2(1.f / m_screen_size.x, 1.0f);
+	m_blur_dirY = glm::vec2(1.f, 1.f / m_screen_size.y);
+
 	InitializeDepthBuffers();
 }
 
@@ -45,11 +51,32 @@ void Renderer::InitializeDepthBuffers()
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	// attach depth texture as FBO's depth buffer
 	glBindFramebuffer(GL_FRAMEBUFFER, m_depth_map_fbo);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_depth_map, 0);
 	glDrawBuffer(GL_NONE);
 	glReadBuffer(GL_NONE);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+	float quadVertices[] = {
+		// positions        // texture Coords
+		-1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+		-1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+		 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+		 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+	};
+	// setup plane VAO
+	glGenVertexArrays(1, &m_screen_vao);
+	glGenBuffers(1, &m_screen_vbo);
+	glBindVertexArray(m_screen_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, m_screen_vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+	glBindVertexArray(0); //unbind screen_vao
 }
 
 void Renderer::ClearBuffer()
@@ -71,22 +98,27 @@ void Renderer::Render()
 
 void Renderer::SwitchSphVisibility()
 {
-	m_sph_visibility = !m_sph_visibility;
+	m_b_sph_visibility = !m_b_sph_visibility;
 }
 
 void Renderer::SwitchDEMVisibility()
 {
-	m_dem_visibility = !m_dem_visibility;
+	m_b_dem_visibility = !m_b_dem_visibility;
 }
 
 void Renderer::SwitchBoundaryVisibility()
 {
-	m_boundary_visibility = !m_boundary_visibility;
+	m_b_boundary_visibility = !m_b_boundary_visibility;
 }
 
 void Renderer::SwitchTemperatureShader()
 {
 	m_use_temperature_shader = !m_use_temperature_shader;
+}
+
+void Renderer::SwitchDepthSmooth()
+{
+	m_b_smooth_depth = !m_b_smooth_depth;
 }
 
 
@@ -169,7 +201,7 @@ void Renderer::RenderParticles()
 
 	const std::shared_ptr<Shader> shader = (m_use_temperature_shader) ? temp_shader: point_shader;
 
-	if (m_sph_visibility)
+	if (m_b_sph_visibility)
 	{
 		// fluid particles
 		const ParticleSet* const particles = m_particle_system->getSPHParticles();
@@ -193,7 +225,7 @@ void Renderer::RenderParticles()
 
 		glBindVertexArray(0);
 	}
-	if (m_dem_visibility)
+	if (m_b_dem_visibility)
 	{
 		/*
 		const std::shared_ptr<Shader> shader = m_resource_manager->FindShaderByName("WetPointSprite");
@@ -227,7 +259,7 @@ void Renderer::RenderParticles()
 		glBindVertexArray(0);
 	}
 
-	if (m_boundary_visibility)
+	if (m_b_boundary_visibility)
 	{
 		// render boundary particles
 		const ParticleSet* const boundary_particles = m_particle_system->getBoundaryParticles();
@@ -304,7 +336,7 @@ void Renderer::RenderFluidDepth()
 	//shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
 
 
-	if (m_sph_visibility)
+	if (m_b_sph_visibility)
 	{
 		// fluid particles
 		const ParticleSet* const particles = m_particle_system->getSPHParticles();
@@ -317,22 +349,72 @@ void Renderer::RenderFluidDepth()
 		glBindVertexArray(m_particle_system->getSPH_VAO());
 		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getSPH_VBO_0());
 		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_particle_system->getEBO());
 
+		//glBindFramebuffer(GL_FRAMEBUFFER, m_depth_map_fbo);
+
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		
 		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getSPH_VBO_1());
 		glEnableVertexAttribArray(1);
 		glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
 
 		glDrawArrays(GL_POINTS, 0, m_particle_system->getSPHParticles()->m_size);
 
+		//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 		glBindVertexArray(0);
 	}
 
-	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	
 
 }
 
 void Renderer::SmoothDepth()
 {
+	if (!m_b_smooth_depth)
+		return;
+	
+	// reset
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	
+	const std::shared_ptr<Shader> shader = m_resource_manager->FindShaderByName("DepthSmooth");
+	shader->Use();
+
+	// activate depth map texture
+
+
+	// set uniforms
+	shader->SetUniformInt("depth_map", m_depth_map);
+	shader->SetUniformFloat("filter_radius", 3);
+	shader->SetUniformFloat("blur_scale", 0.01f);
+	
+	// vertical blur
+	shader->SetUniformVec2("blur_dir", m_blur_dirY);
+
+	//glBindFramebuffer(GL_FRAMEBUFFER, m_depth_map_fbo);
+	//glDrawBuffer(GL_NONE);
+	//glReadBuffer(GL_NONE);
+
+	//glClear(GL_DEPTH_BUFFER_BIT);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, m_depth_map);
+
+	glBindVertexArray(m_screen_vao);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindVertexArray(0);
+
+	/*
+	// Horizontal blur
+	shader->SetUniformVec2("blur_dir", m_blur_dirX);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, m_depth_map_fbo);
+
+	glBindVertexArray(m_screen_vao);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glBindVertexArray(0);
+	*/
+
 }
