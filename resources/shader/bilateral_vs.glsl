@@ -1,11 +1,12 @@
 #version 410
 
-in vec2 vertex_pos;
+in vec3 vertex_pos;
+in vec2 tex_coord;
 
 out vec2 coord;
 
 void main()
 {
-    coord = 0.5f * vertex_pos + 0.5f;
-    gl_position = vec4(vertex_pos, 0.0f, 1.0f);
+    coord = tex_coord;
+    gl_position = vec4(vertex_pos, 1.0f);
 }
