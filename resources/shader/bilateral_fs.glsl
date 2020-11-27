@@ -11,21 +11,35 @@ const float blur_depth_falloff = 65.0f;
 
 out vec4 frag_color;
 
+float LinearizeDepth(float depth)
+{
+    const float near_plane = 0.01f;
+    const float far_plane = 2.f;
+    float z = depth * 2.0 - 1.0; // Back to NDC 
+    return (2.0 * near_plane * far_plane) / (far_plane + near_plane - z * (far_plane - near_plane));	
+}
+
+
 void main() 
 {
-    /*
+    // read depth from depth map texture
+    
     float depth = texture(depth_map, coord).x;
 
+/*
     if(depth <= 0.0f)
     {
         gl_FragDepth = 0;
+        frag_color = vec4(vec3(1,1,1), 1.0f);
         return;
     }
     if(depth >= 1.0f)
     {
         gl_FragDepth = depth;
+        frag_color = vec4(vec3(1,1,1), 1.0f);
         return;
     }
+
 
     float sum = 0.f;
     float wsum = 0.0f;
@@ -48,7 +62,9 @@ void main()
     if(wsum > 0.0f)
         sum /= wsum;
         
-    //gl_FragDepth = sum;
-    */
-    frag_color = vec4(vec3(1,1,1), 1.0f);
+    gl_FragDepth = sum;
+*/
+    //frag_color = vec4(vec3(LinearizeDepth(sum)), 1.0f);
+    frag_color = vec4(vec3(LinearizeDepth(depth) / 2.f), 1.0f);
+    //frag_color = vec4(vec3(1,1,1), 1.0f);
 }

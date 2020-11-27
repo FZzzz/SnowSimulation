@@ -51,6 +51,8 @@ void Renderer::InitializeDepthBuffers()
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	float borderColor[] = { 1.0, 1.0, 1.0, 1.0 };
+	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
 	// attach depth texture as FBO's depth buffer
 	glBindFramebuffer(GL_FRAMEBUFFER, m_depth_map_fbo);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_depth_map, 0);
@@ -346,22 +348,12 @@ void Renderer::RenderFluidDepth()
 #endif
 		shader->Use();
 		//point_shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 1.f));
-		glBindVertexArray(m_particle_system->getSPH_VAO());
-		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getSPH_VBO_0());
-		glEnableVertexAttribArray(0);
 
-		//glBindFramebuffer(GL_FRAMEBUFFER, m_depth_map_fbo);
-
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		// render to depth map fbo
+		glBindFramebuffer(GL_FRAMEBUFFER, m_depth_map_fbo);
 		
-		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getSPH_VBO_1());
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
-
+		glBindVertexArray(m_particle_system->getSPH_VAO());
 		glDrawArrays(GL_POINTS, 0, m_particle_system->getSPHParticles()->m_size);
-
-		//glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 		glBindVertexArray(0);
 	}
 
@@ -373,15 +365,20 @@ void Renderer::SmoothDepth()
 {
 	if (!m_b_smooth_depth)
 		return;
-	
-	// reset
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	
+
 	const std::shared_ptr<Shader> shader = m_resource_manager->FindShaderByName("DepthSmooth");
 	shader->Use();
 
-	// activate depth map texture
+	// reset
+	// unbind to make sure not rendering wrong framebuffer
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, m_viewport_width, m_viewport_height);
 
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	// activate texture
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, m_depth_map);
 
 	// set uniforms
 	shader->SetUniformInt("depth_map", m_depth_map);
@@ -392,19 +389,12 @@ void Renderer::SmoothDepth()
 	shader->SetUniformVec2("blur_dir", m_blur_dirY);
 
 	//glBindFramebuffer(GL_FRAMEBUFFER, m_depth_map_fbo);
-	//glDrawBuffer(GL_NONE);
-	//glReadBuffer(GL_NONE);
 
-	//glClear(GL_DEPTH_BUFFER_BIT);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, m_depth_map);
 
 	glBindVertexArray(m_screen_vao);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindVertexArray(0);
+	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	/*
 	// Horizontal blur

@@ -37,9 +37,13 @@ void main()
     vec4 pixel_pos =  vec4(eye_space_pos + n * sphere_radius, 1.0f);
     vec4 clip_space_pos = projection * pixel_pos;
    
-    gl_FragDepth = (clip_space_pos.z / clip_space_pos.w);// * 0.5f + 0.5f;
+    float depth = (clip_space_pos.z / clip_space_pos.w);
 
-    frag_color = vec4(vec3(LinearizeDepth(gl_FragDepth) / 2.f), 1.0);
+    // assign depth buffer value
+    gl_FragDepth = depth;// * 0.5f + 0.5f;
+
+    // assign color buffer value
+    //frag_color = vec4(vec3(LinearizeDepth(depth) / 2.f), 1.0);
     //frag_color.xyz = diffuse * vertex_point_color;
     //frag_color.w = 1.f;
 
