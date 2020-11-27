@@ -15,7 +15,7 @@ void main()
 {
     // read depth from depth map texture
     
-    float depth = texture2D(depth_map, coord.xy).r;
+    float depth = texture2D(depth_map, coord).x;
 
     if(depth <= 0.0f)
     {
@@ -48,16 +48,10 @@ void main()
 
     if(wsum > 0.0f)
         sum /= wsum;
-        
-    //gl_FragDepth = sum;
-    */
-    frag_color = vec4(vec3(1,1,1), 1.0f);
+    
     gl_FragDepth = sum;
-
     //frag_color = vec4(vec3(depth), 1.0f);
-    //frag_color = texture2D(depth_map, coord);
-    frag_color = vec4(vec3(depth), 1.0f);
-
+    frag_color = texture2D(depth_map, coord);
     //frag_color = vec4(vec3(LinearizeDepth(sum)), 1.0f);
     //frag_color = vec4(vec3(LinearizeDepth(depth) / 2.f), 1.0f);
     //frag_color = vec4(vec3(1,1,1), 1.0f);

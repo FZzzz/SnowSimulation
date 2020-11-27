@@ -83,6 +83,8 @@ private:
 
 	bool m_use_temperature_shader;
 
+
+	GLuint debug_texture;
 };
 
 #endif

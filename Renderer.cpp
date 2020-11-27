@@ -1,4 +1,5 @@
 #include "Renderer.h"
+#include "GLFunctions.h"
 
 
 Renderer::Renderer() :
@@ -57,6 +58,10 @@ void Renderer::InitializeDepthBuffers()
 	glDrawBuffer(GL_NONE);
 	glReadBuffer(GL_NONE);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	string path = "capture.JPG";
+	debug_texture = GLFunctions::LoadTexture(path.c_str(), false);
 
 
 	float quadVertices[] = {
@@ -157,7 +162,7 @@ void Renderer::SetupUniformBufferOject()
 		sizeof(glm::mat4),
 		glm::value_ptr(m_renderer->getLightMat()));
 	*/
-	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+	//glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
 void Renderer::RenderObjects()
@@ -373,18 +378,25 @@ void Renderer::SmoothDepth()
 {
 	if (!m_b_smooth_depth)
 		return;
-	
+
 	// reset
+	// unbind to make sure not rendering wrong framebuffer
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, m_viewport_width, m_viewport_height);
+
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 	
 	const std::shared_ptr<Shader> shader = m_resource_manager->FindShaderByName("DepthSmooth");
 	shader->Use();
 
-	// activate depth map texture
 
+	// activate texture
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, m_depth_map);
 
 	// set uniforms
-	shader->SetUniformInt("depth_map", m_depth_map);
+	shader->SetUniformInt("depth_map", 0);
 	shader->SetUniformFloat("filter_radius", 3);
 	shader->SetUniformFloat("blur_scale", 0.01f);
 	
