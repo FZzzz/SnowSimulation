@@ -1,6 +1,6 @@
 #include "Renderer.h"
 #include "GLFunctions.h"
-
+#include <iostream>
 
 Renderer::Renderer() :
 	m_mainCamera(nullptr),
@@ -43,22 +43,10 @@ void Renderer::Initialize(
 
 void Renderer::InitializeDepthBuffers()
 {
-	glGenFramebuffers(1, &m_depth_map_fbo);
-	glGenTextures(1, &m_depth_map);
-	glBindTexture(GL_TEXTURE_2D, m_depth_map);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
-		m_viewport_width, m_viewport_height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	// attach depth texture as FBO's depth buffer
-	glBindFramebuffer(GL_FRAMEBUFFER, m_depth_map_fbo);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_depth_map, 0);
-	glDrawBuffer(GL_NONE);
-	glReadBuffer(GL_NONE);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glBindTexture(GL_TEXTURE_2D, 0);
+	m_rtt_depth.SetupDepthAttachment(m_viewport_width, m_viewport_height);
+	m_rtt_blurX.SetupDepthAttachment(m_viewport_width, m_viewport_height);
+	m_rtt_blurY.SetupDepthAttachment(m_viewport_width, m_viewport_height);
+	m_rtt_thickness.SetupColorAttachment(m_viewport_width, m_viewport_height);
 
 	string path = "capture.JPG";
 	debug_texture = GLFunctions::LoadTexture(path.c_str(), false);
@@ -97,6 +85,7 @@ void Renderer::Render()
 	//RenderObjects();
 	RenderFluidDepth();
 	SmoothDepth();
+	RenderThickness();
 	//RenderParticles();
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -124,6 +113,7 @@ void Renderer::SwitchTemperatureShader()
 void Renderer::SwitchDepthSmooth()
 {
 	m_b_smooth_depth = !m_b_smooth_depth;
+	std::cout << "Status: " << ((m_b_smooth_depth) ? "On" : "Off") << std::endl;
 }
 
 
@@ -217,17 +207,7 @@ void Renderer::RenderParticles()
 		shader->Use();
 		point_shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 1.f));
 		glBindVertexArray(m_particle_system->getSPH_VAO());
-		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getSPH_VBO_0());
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_particle_system->getEBO());
-
-		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getSPH_VBO_1());
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
-
 		glDrawArrays(GL_POINTS, 0, m_particle_system->getSPHParticles()->m_size);
-
 		glBindVertexArray(0);
 	}
 	if (m_b_dem_visibility)
@@ -249,18 +229,9 @@ void Renderer::RenderParticles()
 		shader->Use();
 
 		point_shader->SetUniformVec3("point_color", glm::vec3(0.0f, 0.7f, 0.35f));
+
 		glBindVertexArray(m_particle_system->getDEMVAO());
-		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getDEM_VBO_0());
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_particle_system->getEBO());
-		
-		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getDEM_VBO_1());
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
-		
 		glDrawArrays(GL_POINTS, 0, m_particle_system->getDEMParticles()->m_size);
-		
 		glBindVertexArray(0);
 	}
 
@@ -272,12 +243,7 @@ void Renderer::RenderParticles()
 		point_shader->SetUniformVec3("point_color", glm::vec3(1.f, 1.f, 1.f));
 
 		glBindVertexArray(m_particle_system->getBoundaryVAO());
-		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getBoundaryVBO());
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
 		glDrawArrays(GL_POINTS, 0, m_particle_system->getBoundaryParticles()->m_size);
-
 		glBindVertexArray(0);
 	}
 }
@@ -306,7 +272,7 @@ void Renderer::RenderGameObject(const std::shared_ptr<Shader>& shader, const std
 	shader->SetUniformVec3("viewPos", m_mainCamera->m_position);
 
 	//glBindTexture(GL_TEXTURE_2D, m_depthMap);
-	glActiveTexture(GL_TEXTURE0);
+	//glActiveTexture(GL_TEXTURE0);
 	//glBindTexture(GL_TEXTURE_2D, m_depthMap);
 
 	glBindVertexArray(mesh->getVAO());
@@ -326,6 +292,9 @@ void Renderer::RenderFluidDepth()
 	const glm::mat4 pvm = m_mainCamera->m_cameraMat * glm::mat4(1);
 	glm::mat4 model_view = m_mainCamera->m_lookAt * glm::mat4(1);
 	
+
+	shader->Use();
+
 	shader->SetUniformMat4("pvm", pvm);
 	shader->SetUniformFloat("point_size", 30.f);
 	shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
@@ -335,11 +304,8 @@ void Renderer::RenderFluidDepth()
 	shader->SetUniformMat4("model_view", model_view);
 	shader->SetUniformMat4("projection", m_mainCamera->m_projection);
 	shader->SetUniformFloat("sphere_radius", m_particle_system->getParticleRadius());
-	
-	//shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
-	//shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
-	//shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
-
+	shader->SetUniformFloat("near_plane", 0.01f);
+	shader->SetUniformFloat("far_plane", 15.f);
 
 	if (m_b_sph_visibility)
 	{
@@ -349,29 +315,28 @@ void Renderer::RenderFluidDepth()
 #ifdef _DEBUG
 		assert(shader);
 #endif
-		shader->Use();
-		//point_shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 1.f));
+
+		glEnable(GL_PROGRAM_POINT_SIZE);
+		glEnable(GL_POINT_SPRITE);
+		glDepthMask(GL_TRUE); // Allow to write depth buffer
+
+		// write to fbo
+		if (m_b_smooth_depth)
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, m_rtt_depth.m_fbo);
+			glClear(GL_DEPTH_BUFFER_BIT);
+		}
 		glBindVertexArray(m_particle_system->getSPH_VAO());
-		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getSPH_VBO_0());
-		glEnableVertexAttribArray(0);
-
-		//glBindFramebuffer(GL_FRAMEBUFFER, m_depth_map_fbo);
-
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		
-		glBindBuffer(GL_ARRAY_BUFFER, m_particle_system->getSPH_VBO_1());
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, 0);
-
 		glDrawArrays(GL_POINTS, 0, m_particle_system->getSPHParticles()->m_size);
-
-		//glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 		glBindVertexArray(0);
+
+		// unbind
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+		glDisable(GL_PROGRAM_POINT_SIZE);
+		glDisable(GL_POINT_SPRITE);
 	}
-
-	
-
 }
 
 void Renderer::SmoothDepth()
@@ -379,54 +344,103 @@ void Renderer::SmoothDepth()
 	if (!m_b_smooth_depth)
 		return;
 
+	const std::shared_ptr<Shader> shader = m_resource_manager->FindShaderByName("DepthSmooth");
+	shader->Use();
+	
 	// reset
 	// unbind to make sure not rendering wrong framebuffer
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, m_viewport_width, m_viewport_height);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClearColor(m_clear_color.r, m_clear_color.g, m_clear_color.b, m_clear_color.a);
 
-	
-	const std::shared_ptr<Shader> shader = m_resource_manager->FindShaderByName("DepthSmooth");
-	shader->Use();
-
+	// -------------------vertical blur---------------------
 
 	// activate texture
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, m_depth_map);
-
+	glBindTexture(GL_TEXTURE_2D, m_rtt_depth.m_texture);
+	
 	// set uniforms
 	shader->SetUniformInt("depth_map", 0);
 	shader->SetUniformFloat("filter_radius", 3);
-	shader->SetUniformFloat("blur_scale", 0.01f);
-	
-	// vertical blur
+	shader->SetUniformFloat("blur_scale", 0.05f);
 	shader->SetUniformVec2("blur_dir", m_blur_dirY);
+	shader->SetUniformFloat("near_plane", 0.01f);
+	shader->SetUniformFloat("far_plane", 15.f);
 
-	//glBindFramebuffer(GL_FRAMEBUFFER, m_depth_map_fbo);
-	//glDrawBuffer(GL_NONE);
-	//glReadBuffer(GL_NONE);
-
-	//glClear(GL_DEPTH_BUFFER_BIT);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, m_depth_map);
-
+	glBindFramebuffer(GL_FRAMEBUFFER, m_rtt_blurY.m_fbo);
+	glClear(GL_DEPTH_BUFFER_BIT);
+	
 	glBindVertexArray(m_screen_vao);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-	//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glBindVertexArray(0);
 
-	/*
-	// Horizontal blur
+
+	// -------------------Horizontal blur---------------------
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, m_viewport_width, m_viewport_height);
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClearColor(m_clear_color.r, m_clear_color.g, m_clear_color.b, m_clear_color.a);
+
+	// active & bind texture
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, m_rtt_blurY.m_texture);
+
+	// set uniforms
+	shader->SetUniformInt("depth_map", 0);
 	shader->SetUniformVec2("blur_dir", m_blur_dirX);
 
-	glBindFramebuffer(GL_FRAMEBUFFER, m_depth_map_fbo);
+	// bind framebuffer
+	glBindFramebuffer(GL_FRAMEBUFFER, m_rtt_blurX.m_fbo);
+	glClear(GL_DEPTH_BUFFER_BIT);
 
 	glBindVertexArray(m_screen_vao);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	glBindVertexArray(0);
-	*/
 
+}
+
+void Renderer::RenderThickness()
+{	
+	const std::shared_ptr<Shader> shader = m_resource_manager->FindShaderByName("Thickness");
+	shader->Use();
+
+	// reset
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, m_viewport_width, m_viewport_height);
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClearColor(m_clear_color.r, m_clear_color.g, m_clear_color.b, m_clear_color.a);
+
+	// set uniforms
+	const glm::mat4 pvm = m_mainCamera->m_cameraMat * glm::mat4(1);
+	glm::mat4 model_view = m_mainCamera->m_lookAt * glm::mat4(1);
+	shader->SetUniformMat4("model_view", model_view);
+	shader->SetUniformMat4("pvm", pvm);
+	shader->SetUniformFloat("point_size", 30.f);
+
+	// Enable functions
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE); // C_{final} = C_a * 1 + C_b * 1
+	glBlendEquation(GL_FUNC_ADD); // add to get the thickness
+
+	glDepthMask(GL_FALSE); // forbbit shader writting to depth buffer
+
+	glEnable(GL_PROGRAM_POINT_SIZE);
+	glEnable(GL_POINT_SPRITE);
+
+	// bind framebuffer
+	//glBindFramebuffer(GL_FRAMEBUFFER, m_rtt_thickness.m_fbo);
+	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	// render particle thickness
+	glBindVertexArray(m_particle_system->getSPH_VAO());
+	glDrawArrays(GL_POINTS, 0, m_particle_system->getSPHParticles()->m_size);
+	glBindVertexArray(0);
+
+	glDisable(GL_PROGRAM_POINT_SIZE);
+	glDisable(GL_POINT_SPRITE);
+	glDisable(GL_BLEND); // disable blend for safety
 }

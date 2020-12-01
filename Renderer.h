@@ -5,8 +5,17 @@
 #include "ResourceManager.h"
 #include "Camera.h"
 #include "ParticleSystem.h"
+#include "RenderTargetTexture.h"
 
 class Renderer;
+
+/*
+class RenderTargetTexture
+{
+	GLuint m_texture;
+	GLuint m_fbo;
+};
+*/
 
 class Renderer
 {
@@ -50,8 +59,10 @@ private:
 		const std::shared_ptr<Mesh>& mesh,
 		const Transform& transform);
 
+	// SSFR
 	void RenderFluidDepth();
 	void SmoothDepth();
+	void RenderThickness();
 
 	std::shared_ptr<Camera> m_mainCamera;
 	std::shared_ptr<ResourceManager> m_resource_manager;
@@ -62,9 +73,15 @@ private:
 
 	GLuint m_ubo;
 
-	GLuint m_depth_map;
-	GLuint m_depth_map_fbo;
-	GLuint m_depth_smooth_fbo;
+	//GLuint m_depth_map;
+	//GLuint m_depth_map_fbo;
+	//GLuint m_depth_smooth_fbo;
+
+	RenderTargetTexture m_rtt_depth;
+	RenderTargetTexture m_rtt_blurX;
+	RenderTargetTexture m_rtt_blurY;
+	RenderTargetTexture m_rtt_thickness;
+
 
 	GLuint m_screen_vao;
 	GLuint m_screen_vbo;

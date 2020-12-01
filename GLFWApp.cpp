@@ -98,11 +98,11 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	}
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_MULTISAMPLE);
-	glEnable(GL_BLEND);
+	//glEnable(GL_BLEND);
 	glEnable(GL_PROGRAM_POINT_SIZE);
 	glEnable(GL_POINT_SPRITE); 
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glDepthFunc(GL_LESS);
+	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	//glDepthFunc(GL_LESS);
 
 	/* ResourceManager Creation */
 	m_resource_manager = std::make_shared<ResourceManager>();
@@ -145,6 +145,10 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	std::shared_ptr<Shader> depth_smooth_shader = std::make_shared<Shader>("DepthSmooth");
 	depth_smooth_shader->SetupShader("resources/shader/bilateral_vs.glsl",
 		"resources/shader/bilateral_fs.glsl");
+
+	std::shared_ptr<Shader> thickness_shader = std::make_shared<Shader>("Thickness");
+	thickness_shader->SetupShader("resources/shader/ssfr_thickness_vs.glsl",
+		"resources/shader/ssfr_thickness_fs.glsl");
 
 
 	auto mat_uniform = glGetUniformBlockIndex(shadow_mapping_shader->getProgram(), "Matrices");
