@@ -36,7 +36,8 @@ public:
 	void SwitchDEMVisibility();
 	void SwitchBoundaryVisibility();
 	void SwitchTemperatureShader();
-	void SwitchDepthSmooth();
+	//void SwitchDepthSmooth();
+	void SwtichRenderFluid();
 
 	// setters
 	void setMainCamera(std::shared_ptr<Camera> camera);
@@ -44,7 +45,9 @@ public:
 
 private:
 
-	void InitializeDepthBuffers();
+	void InitializeSSFRBuffers();
+
+	void DisableGLFunctions();
 
 	void ClearBuffer();
 
@@ -63,6 +66,8 @@ private:
 	void RenderFluidDepth();
 	void SmoothDepth();
 	void RenderThickness();
+	void RenderFluid();
+
 
 	std::shared_ptr<Camera> m_mainCamera;
 	std::shared_ptr<ResourceManager> m_resource_manager;
@@ -76,7 +81,7 @@ private:
 	//GLuint m_depth_map;
 	//GLuint m_depth_map_fbo;
 	//GLuint m_depth_smooth_fbo;
-
+	RenderTargetTexture m_rtt_scene;
 	RenderTargetTexture m_rtt_depth;
 	RenderTargetTexture m_rtt_blurX;
 	RenderTargetTexture m_rtt_blurY;
@@ -96,9 +101,10 @@ private:
 	bool m_b_sph_visibility;
 	bool m_b_dem_visibility;
 	bool m_b_boundary_visibility;
-	bool m_b_smooth_depth;
+	//bool m_b_smooth_depth;
+	bool m_b_render_fluid;
 
-	bool m_use_temperature_shader;
+	bool m_b_use_temperature_shader;
 
 
 	GLuint debug_texture;

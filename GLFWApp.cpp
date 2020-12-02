@@ -99,7 +99,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_MULTISAMPLE);
 	//glEnable(GL_BLEND);
-	glEnable(GL_PROGRAM_POINT_SIZE);
+	glEnable(GL_VERTEX_PROGRAM_POINT_SIZE);
 	glEnable(GL_POINT_SPRITE); 
 	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	//glDepthFunc(GL_LESS);
@@ -149,6 +149,10 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	std::shared_ptr<Shader> thickness_shader = std::make_shared<Shader>("Thickness");
 	thickness_shader->SetupShader("resources/shader/ssfr_thickness_vs.glsl",
 		"resources/shader/ssfr_thickness_fs.glsl");
+
+	std::shared_ptr<Shader> fluid_shader = std::make_shared<Shader>("SSFR_Fluid");
+	fluid_shader->SetupShader("resources/shader/ssfr_fluid_vs.glsl",
+		"resources/shader/ssfr_fluid_fs.glsl");
 
 
 	auto mat_uniform = glGetUniformBlockIndex(shadow_mapping_shader->getProgram(), "Matrices");
@@ -346,10 +350,10 @@ void Key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 			break;
 		}
 
-		case GLFW_KEY_P:
+		case GLFW_KEY_F:
 		{			
 			auto renderer = instance->getRenderer();
-			renderer->SwitchDepthSmooth();
+			renderer->SwtichRenderFluid();
 			break;
 		}
 		}
