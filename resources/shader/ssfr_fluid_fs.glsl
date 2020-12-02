@@ -112,7 +112,7 @@ void main()
 	vec3 diffuse = light_color.xyz * mix(vec3(0.3647, 0.4392, 0.6196), vec3(1.0), (ln*0.5 + 0.5)) * (1 - light_color.w);
 	//vec3 diffuse = color.xyz * mix(vec3(0.29, 0.379, 0.59), vec3(1.0), (ln*0.5 + 0.5));
 
-	vec3 sky_color = vec3(0.2784, 0.302, 0.3529)*1.2;
+	vec3 sky_color = vec3(0.1451, 0.2471, 0.4588)*1.2;
 	vec3 ground_color = vec3(0.15, 0.15, 0.15);
 
 	vec3 r_eye = reflect(view_dir, normal).xyz;

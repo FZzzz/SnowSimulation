@@ -98,6 +98,7 @@ void Renderer::Render()
 		RenderFluidDepth();
 		SmoothDepth();
 		RenderThickness();
+		RenderFluid();
 	}
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -200,34 +201,34 @@ void Renderer::RenderParticles()
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, m_viewport_width, m_viewport_height);
 
-	// The logic here is a mess!!!!
-	const std::shared_ptr<Shader> point_shader = m_resource_manager->FindShaderByName("PointSprite");
-	const glm::mat4 pvm = m_mainCamera->m_cameraMat * glm::mat4(1);
-	point_shader->SetUniformMat4("pvm", pvm);
-	point_shader->SetUniformFloat("point_size", 30.f);
-	point_shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
-	point_shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
-	point_shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
 	
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClearColor(m_clear_color.r, m_clear_color.g, m_clear_color.b, m_clear_color.a);
+
+	const glm::mat4 pvm = m_mainCamera->m_cameraMat * glm::mat4(1);
+
+	// Get shaders
+	const std::shared_ptr<Shader> point_shader = m_resource_manager->FindShaderByName("PointSprite");
 	const std::shared_ptr<Shader> temp_shader = m_resource_manager->FindShaderByName("PointSpriteTemperature");
-	temp_shader->SetUniformMat4("pvm", pvm);
-	temp_shader->SetUniformFloat("point_size", 30.f);
-	temp_shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
-	temp_shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
-	temp_shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
+
+	// select shader
+	const std::shared_ptr<Shader> shader = (m_b_use_temperature_shader) ? temp_shader : point_shader;
+	shader->Use();
+
+	// set uniforms
+	shader->SetUniformMat4("pvm", pvm);
+	shader->SetUniformFloat("point_size", 30.f);
+	shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
+	shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
+	shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
 
 	if (m_b_use_temperature_shader)
 	{
-		temp_shader->SetUniformVec3("hottest_color", glm::vec3(1, 0, 0));
-		temp_shader->SetUniformVec3("coolest_color", glm::vec3(0, 0, 1));
-		temp_shader->SetUniformFloat("hottest_temperature", m_particle_system->getHottestTemperature());
-		temp_shader->SetUniformFloat("coolest_temperature", m_particle_system->getCoolestTemperature());
+		shader->SetUniformVec3("hottest_color", glm::vec3(1, 0, 0));
+		shader->SetUniformVec3("coolest_color", glm::vec3(0, 0, 1));
+		shader->SetUniformFloat("hottest_temperature", m_particle_system->getHottestTemperature());
+		shader->SetUniformFloat("coolest_temperature", m_particle_system->getCoolestTemperature());
 	}
-	
-	const std::shared_ptr<Shader> shader = (m_b_use_temperature_shader) ? temp_shader: point_shader;
-
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glClearColor(m_clear_color.r, m_clear_color.g, m_clear_color.b, m_clear_color.a);
 
 	// enable opengl functions
 	glEnable(GL_VERTEX_PROGRAM_POINT_SIZE);
@@ -242,7 +243,8 @@ void Renderer::RenderParticles()
 #ifdef _DEBUG
 		assert(shader);
 #endif
-		shader->Use();
+		//shader->Use();
+		// set point color
 		point_shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 1.f));
 
 		glBindVertexArray(m_particle_system->getSPH_VAO());
@@ -257,8 +259,9 @@ void Renderer::RenderParticles()
 #ifdef _DEBUG
 		assert(shader);
 #endif
-		shader->Use();
+		//shader->Use();
 
+		// set point color
 		point_shader->SetUniformVec3("point_color", glm::vec3(0.0f, 0.7f, 0.35f));
 
 		if (m_b_render_fluid)
@@ -524,8 +527,8 @@ void Renderer::RenderFluid()
 	shader->SetUniformMat4("model_view", model_view);
 	shader->SetUniformVec2("inv_tex_scale", glm::vec2(1.f / (float)m_viewport_width, 1.f / (float)m_viewport_height));
 	
-	glBindFramebuffer(GL_FRAMEBUFFER, m_rtt_scene.m_fbo);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	//glBindFramebuffer(GL_FRAMEBUFFER, m_rtt_scene.m_fbo);
+	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// render
 	glBindVertexArray(m_screen_vao);
