@@ -8,6 +8,7 @@ Renderer::Renderer() :
 	m_viewport_width(1600),
 	m_viewport_height(900),
 	m_clear_color(0.15f, 0.15f, 0.15f, 0),
+	m_point_size(50.f),
 	m_ubo(-1),
 	m_b_sph_visibility(true),
 	m_b_dem_visibility(true),
@@ -218,7 +219,7 @@ void Renderer::RenderParticles()
 
 	// set uniforms
 	shader->SetUniformMat4("pvm", pvm);
-	shader->SetUniformFloat("point_size", 30.f);
+	shader->SetUniformFloat("point_size", m_point_size);
 	shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
 	shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
 	shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
@@ -299,7 +300,7 @@ void Renderer::RenderParticles()
 		const ParticleSet* const boundary_particles = m_particle_system->getBoundaryParticles();
 		point_shader->Use();
 		shader->SetUniformMat4("pvm", pvm);
-		shader->SetUniformFloat("point_size", 30.f);
+		shader->SetUniformFloat("point_size", m_point_size);
 		shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
 		shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
 		shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
@@ -369,7 +370,7 @@ void Renderer::RenderFluidDepth()
 	shader->Use();
 
 	shader->SetUniformMat4("pvm", pvm);
-	shader->SetUniformFloat("point_size", 30.f);
+	shader->SetUniformFloat("point_size", m_point_size);
 	shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
 	shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
 	shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
@@ -431,7 +432,7 @@ void Renderer::SmoothDepth()
 	// set uniforms
 	shader->SetUniformInt("depth_map", 0);
 	shader->SetUniformFloat("filter_radius", 3);
-	shader->SetUniformFloat("blur_scale", 0.15f);
+	shader->SetUniformFloat("blur_scale", 0.01f);
 	shader->SetUniformVec2("blur_dir", m_blur_dirY);
 	shader->SetUniformFloat("near_plane", 0.01f);
 	shader->SetUniformFloat("far_plane", 15.f);
@@ -486,7 +487,7 @@ void Renderer::RenderThickness()
 	glm::mat4 model_view = m_mainCamera->m_lookAt * glm::mat4(1);
 	shader->SetUniformMat4("model_view", model_view);
 	shader->SetUniformMat4("pvm", pvm);
-	shader->SetUniformFloat("point_size", 50.f);
+	shader->SetUniformFloat("point_size", m_point_size);
 
 	// Enable functions
 	glEnable(GL_BLEND);

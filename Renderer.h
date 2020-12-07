@@ -97,6 +97,7 @@ private:
 
 	glm::vec4 m_clear_color;
 
+	float m_point_size;
 
 	bool m_b_sph_visibility;
 	bool m_b_dem_visibility;
