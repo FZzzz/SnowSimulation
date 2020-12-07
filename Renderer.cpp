@@ -264,15 +264,31 @@ void Renderer::RenderParticles()
 		// set point color
 		point_shader->SetUniformVec3("point_color", glm::vec3(0.0f, 0.7f, 0.35f));
 
+		// if we are rendering the fluid, render to scene fbo
 		if (m_b_render_fluid)
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, m_rtt_scene.m_fbo);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		}
 
+		// render
 		glBindVertexArray(m_particle_system->getDEMVAO());
 		glDrawArrays(GL_POINTS, 0, m_particle_system->getDEMParticles()->m_size);
 		glBindVertexArray(0);
+	}
+	else
+	{
+		// if the dem visibility is set to false but still rendering fluid, render nothing to scene fbo
+		if (m_b_render_fluid)
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, m_rtt_scene.m_fbo);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			
+			//render nothing// render
+			glBindVertexArray(m_particle_system->getDEMVAO());
+			glDrawArrays(GL_POINTS, 0, 0);
+			glBindVertexArray(0);
+		}
 	}
 
 	if (m_b_boundary_visibility)
@@ -523,6 +539,7 @@ void Renderer::RenderFluid()
 	shader->SetUniformInt("thickness_map", 1);
 	shader->SetUniformInt("scene_map", 2);
 	shader->SetUniformVec4("light_color", glm::vec4(1));
+	shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
 	shader->SetUniformMat4("projection", m_mainCamera->m_projection);
 	shader->SetUniformMat4("model_view", model_view);
 	shader->SetUniformVec2("inv_tex_scale", glm::vec2(1.f / (float)m_viewport_width, 1.f / (float)m_viewport_height));
