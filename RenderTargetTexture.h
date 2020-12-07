@@ -29,19 +29,31 @@ public:
 		glBindTexture(GL_TEXTURE_2D, 0);
 	}
 
-	void SetupColorAttachment(GLsizei width, GLsizei height)
+	void SetupColorAttachment(GLsizei width, GLsizei height, bool b_depth_info = false)
 	{
 		glGenFramebuffers(1, &m_fbo);
 		glGenTextures(1, &m_texture);
 		glBindTexture(GL_TEXTURE_2D, m_texture);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F,
 			width, height, 0, GL_RGBA, GL_FLOAT, 0);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+
 		// attach texture to color buffer 
 		glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+
+		// generate render buffer object if we need depth testing
+		if (b_depth_info)
+		{
+			glGenRenderbuffers(1, &m_rbo);
+			glBindRenderbuffer(GL_RENDERBUFFER, m_rbo);
+			glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
+			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_rbo);
+		}
+
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_texture, 0);
 		//glDrawBuffer(GL_NONE);
 		//glReadBuffer(GL_NONE);
@@ -51,6 +63,7 @@ public:
 
 	GLuint m_texture;
 	GLuint m_fbo;
+	GLuint m_rbo; // render buffer object
 
 };
 

@@ -44,7 +44,7 @@ void Renderer::Initialize(
 
 void Renderer::InitializeSSFRBuffers()
 {
-	m_rtt_scene.SetupColorAttachment(m_viewport_width, m_viewport_height);
+	m_rtt_scene.SetupColorAttachment(m_viewport_width, m_viewport_height, true);
 	m_rtt_depth.SetupDepthAttachment(m_viewport_width, m_viewport_height);
 	m_rtt_blurX.SetupDepthAttachment(m_viewport_width, m_viewport_height);
 	m_rtt_blurY.SetupDepthAttachment(m_viewport_width, m_viewport_height);
@@ -93,6 +93,7 @@ void Renderer::Render()
 	glViewport(0, 0, m_viewport_width, m_viewport_height);
 	//RenderObjects();
 	RenderParticles();
+	
 	if (m_b_sph_visibility && m_b_render_fluid)
 	{
 		RenderFluidDepth();
@@ -100,6 +101,7 @@ void Renderer::Render()
 		RenderThickness();
 		RenderFluid();
 	}
+	
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -200,7 +202,6 @@ void Renderer::RenderParticles()
 	// Good habbit to reset :>
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, m_viewport_width, m_viewport_height);
-
 	
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glClearColor(m_clear_color.r, m_clear_color.g, m_clear_color.b, m_clear_color.a);
@@ -234,6 +235,8 @@ void Renderer::RenderParticles()
 	glEnable(GL_VERTEX_PROGRAM_POINT_SIZE);
 	//glEnable(GL_POINT_SPRITE);
 	glEnable(GL_DEPTH_TEST);
+	//glEnable(GL_BLEND);
+	//glDepthMask(GL_TRUE);
 
 	if (m_b_sph_visibility && !m_b_render_fluid)
 	{
@@ -243,9 +246,9 @@ void Renderer::RenderParticles()
 #ifdef _DEBUG
 		assert(shader);
 #endif
-		//shader->Use();
 		// set point color
-		point_shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 1.f));
+		if (!m_b_use_temperature_shader)
+			shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 1.f));
 
 		glBindVertexArray(m_particle_system->getSPH_VAO());
 		glDrawArrays(GL_POINTS, 0, m_particle_system->getSPHParticles()->m_size);
@@ -259,10 +262,9 @@ void Renderer::RenderParticles()
 #ifdef _DEBUG
 		assert(shader);
 #endif
-		//shader->Use();
-
 		// set point color
-		point_shader->SetUniformVec3("point_color", glm::vec3(0.0f, 0.7f, 0.35f));
+		if (!m_b_use_temperature_shader)
+			shader->SetUniformVec3("point_color", glm::vec3(0.75f, 0.75f, 0.75f));
 
 		// if we are rendering the fluid, render to scene fbo
 		if (m_b_render_fluid)
@@ -284,7 +286,7 @@ void Renderer::RenderParticles()
 			glBindFramebuffer(GL_FRAMEBUFFER, m_rtt_scene.m_fbo);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 			
-			//render nothing// render
+			//render nothing
 			glBindVertexArray(m_particle_system->getDEMVAO());
 			glDrawArrays(GL_POINTS, 0, 0);
 			glBindVertexArray(0);
@@ -295,7 +297,12 @@ void Renderer::RenderParticles()
 	{
 		// render boundary particles
 		const ParticleSet* const boundary_particles = m_particle_system->getBoundaryParticles();
-
+		point_shader->Use();
+		shader->SetUniformMat4("pvm", pvm);
+		shader->SetUniformFloat("point_size", 30.f);
+		shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
+		shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
+		shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
 		point_shader->SetUniformVec3("point_color", glm::vec3(1.f, 1.f, 1.f));
 
 		glBindVertexArray(m_particle_system->getBoundaryVAO());
@@ -303,7 +310,7 @@ void Renderer::RenderParticles()
 		glBindVertexArray(0);
 	}
 
-	// diable when not using 
+	// disable when not using 
 	glDisable(GL_VERTEX_PROGRAM_POINT_SIZE);
 	//glDisable(GL_POINT_SPRITE);
 }
@@ -424,7 +431,7 @@ void Renderer::SmoothDepth()
 	// set uniforms
 	shader->SetUniformInt("depth_map", 0);
 	shader->SetUniformFloat("filter_radius", 3);
-	shader->SetUniformFloat("blur_scale", 0.05f);
+	shader->SetUniformFloat("blur_scale", 0.15f);
 	shader->SetUniformVec2("blur_dir", m_blur_dirY);
 	shader->SetUniformFloat("near_plane", 0.01f);
 	shader->SetUniformFloat("far_plane", 15.f);
@@ -479,7 +486,7 @@ void Renderer::RenderThickness()
 	glm::mat4 model_view = m_mainCamera->m_lookAt * glm::mat4(1);
 	shader->SetUniformMat4("model_view", model_view);
 	shader->SetUniformMat4("pvm", pvm);
-	shader->SetUniformFloat("point_size", 30.f);
+	shader->SetUniformFloat("point_size", 50.f);
 
 	// Enable functions
 	glEnable(GL_BLEND);
@@ -531,7 +538,6 @@ void Renderer::RenderFluid()
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, m_rtt_scene.m_texture);
 
-
 	// set uniforms
 	const glm::mat4 pvm = m_mainCamera->m_cameraMat * glm::mat4(1);
 	glm::mat4 model_view = m_mainCamera->m_lookAt * glm::mat4(1);
@@ -544,9 +550,6 @@ void Renderer::RenderFluid()
 	shader->SetUniformMat4("model_view", model_view);
 	shader->SetUniformVec2("inv_tex_scale", glm::vec2(1.f / (float)m_viewport_width, 1.f / (float)m_viewport_height));
 	
-	//glBindFramebuffer(GL_FRAMEBUFFER, m_rtt_scene.m_fbo);
-	//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 	// render
 	glBindVertexArray(m_screen_vao);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
