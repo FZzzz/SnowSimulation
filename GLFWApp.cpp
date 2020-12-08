@@ -137,6 +137,9 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	point_temp_shader->SetupShader("resources/shader/point_sprite_temperature_vs.glsl",
 		"resources/shader/point_sprite_fs.glsl");
 
+	std::shared_ptr<Shader> simple_depth_shader = std::make_shared<Shader>("SimpleDepth");
+	simple_depth_shader->SetupShader("resources/shader/simple_depth_vs.glsl",
+		"resources/shader/simple_depth_fs.glsl");
 	
 	std::shared_ptr<Shader> point_depth_shader = std::make_shared<Shader>("PointDepth");
 	point_depth_shader->SetupShader("resources/shader/point_depth_vs.glsl",
@@ -201,24 +204,10 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	
 		
 	// Terrain Initilization
-	{
-		
+	{	
 		std::shared_ptr<Plane> plane_terrain = std::make_shared<Plane>();
 		plane_terrain->Initialize(glm::vec3(0, 0, 0), shadow_mapping_shader);
 		m_resource_manager->AddGameObject(static_pointer_cast<GameObject>(plane_terrain));
-		m_simulator->AddCollider(plane_terrain->getCollider());
-		
-		
-		auto collider = new PlaneCollider(glm::vec3(1, 0, 0), -10);
-		m_simulator->AddCollider(collider);
-		
-		collider = new PlaneCollider(glm::vec3(-1, 0, 0), -10);
-		m_simulator->AddCollider(collider);
-		collider = new PlaneCollider(glm::vec3(0, 0, 1), -15 );
-		m_simulator->AddCollider(collider);
-		collider = new PlaneCollider(glm::vec3(0, 0, -1), 1);
-		m_simulator->AddCollider(collider);
-		
 	}
 
 	//GenerateRadomParticles();

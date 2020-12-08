@@ -54,16 +54,24 @@ private:
 	void SetupUniformBufferOject();
 
 	void RenderObjects();
+	void RenderObjectsDepth();
 	// Use instancing
-	void RenderParticles();
+	void RenderScene();
 
 	void RenderGameObject(
 		const std::shared_ptr<Shader>& shader,
 		const std::shared_ptr<Mesh>& mesh,
 		const Transform& transform);
 
+	void RenderGameObjectDepth(
+		const std::shared_ptr<Shader>& shader,
+		const std::shared_ptr<Mesh>& mesh,
+		const Transform& transform);
+
+
 	// SSFR
 	void RenderFluidDepth();
+	void RenderSceneDepth();
 	void SmoothDepth();
 	void RenderThickness();
 	void RenderFluid();
@@ -83,6 +91,7 @@ private:
 	//GLuint m_depth_smooth_fbo;
 	RenderTargetTexture m_rtt_scene;
 	RenderTargetTexture m_rtt_depth;
+	RenderTargetTexture m_rtt_scene_depth;
 	RenderTargetTexture m_rtt_blurX;
 	RenderTargetTexture m_rtt_blurY;
 	RenderTargetTexture m_rtt_thickness;

@@ -7,6 +7,7 @@ in vec2 coord;
 uniform sampler2D depth_map;
 uniform sampler2D thickness_map;
 uniform sampler2D scene_map;
+uniform sampler2D scene_depth_map;
 uniform vec4 light_color;
 //uniform vec3 light_pos;
 uniform mat4 projection;
@@ -32,8 +33,10 @@ vec3 uv_to_eye(vec2 p, float z) {
 void main()
 {
     float depth = texture2D(depth_map, coord).x;
+    float scene_depth = texture2D(scene_depth_map, coord).x;
     float thickness = max(texture2D(thickness_map, coord).r, 0.3f);
     vec4  scene = texture2D(scene_map, coord);
+
 
     if(depth == 0.0f)
     {
@@ -41,6 +44,11 @@ void main()
         return;
     }
     if(depth == 1.f)
+    {
+        frag_color = scene;
+        return;
+    }
+    if(depth >= scene_depth)
     {
         frag_color = scene;
         return;
@@ -102,7 +110,9 @@ void main()
     refract_scale *= smoothstep(0.1f, 0.4f, world_pos.y);
 
     vec2 refract_coord = coord + normal.xy * refract_scale * tex_scale;
-	vec3 transmission = exp(-(vec3(1.0) - light_color.xyz) * thickness);
+
+    // Color substraction
+	vec3 transmission = exp(-(vec3(0.9804, 1.0, 0.7255) - light_color.xyz) * thickness);
 
     vec3 refract = texture(scene_map, refract_coord).xyz * transmission;
     vec3 l_vec = normalize(world_pos.xyz - light_pos);
@@ -114,10 +124,10 @@ void main()
     float fresnel = fres_bias + fres_scale * pow(min(0.0, 1.0-dot(normal, view_dir)), fres_power);
 
     //Diffuse light
-	//vec3 diffuse = light_color.xyz * mix(vec3(1.0, 1.0, 1.0), vec3(1.0), (ln*0.5 + 0.5)) * (1 - light_color.w);
-	//vec3 diffuse = color.xyz * mix(vec3(0.29, 0.379, 0.59), vec3(1.0), (ln*0.5 + 0.5));
+	vec3 diffuse = light_color.xyz * mix(vec3(1.0, 1.0, 1.0), vec3(1.0), (ln*0.5 + 0.5)) * (1 - light_color.w);
+	//vec3 diffuse = light_color.xyz * mix(vec3(0.29, 0.379, 0.59), vec3(1.0), (ln*0.5 + 0.5));
 
-	vec3 sky_color = vec3(1.0, 1.0, 1.0)*1.2;
+	vec3 sky_color = vec3(0.8078, 0.4784, 0.2078)*1.2;
 	vec3 ground_color = vec3(1.0, 1.0, 1.0);
 
 	vec3 r_eye = reflect(view_dir, normal).xyz;
@@ -125,15 +135,9 @@ void main()
 
 	vec3 reflect = vec3(1.0) + mix(ground_color, sky_color, smoothstep(0.15, 0.25, r_world.y));
 
-    float diffuse = max(dot(normal, light_dir), 0.0);
+    vec3 final_color = diffuse + (mix(refract, reflect, fresnel) + specular) * light_color.w;
 
-    vec3 final_color = 0.5f* diffuse * light_color.xyz;
-    //vec3 final_color = diffuse + (mix(refract, reflect, fresnel) + specular) * light_color.w;
-    //vec3 final_color = diffuse * light_color.w;
-
-    //frag_color = vec4(final_color, 1.0);
-    frag_color = vec4(normal, 1.0);
-    //frag_color = vec4(final_color.xyz, 1.0);
+    frag_color = vec4(final_color.xyz, 1.0);
 
     gl_FragDepth = depth;
 }

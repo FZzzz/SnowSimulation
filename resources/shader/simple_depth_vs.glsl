@@ -1,10 +1,9 @@
-#version 330 core
+#version 410
 layout (location = 0) in vec3 aPos;
 
-uniform mat4 lightSpaceMatrix;
-uniform mat4 modelMat;
+uniform mat4 pvm;
 
 void main()
 {
-    gl_Position = lightSpaceMatrix * modelMat * vec4(aPos, 1.0);
+    gl_Position = pvm * vec4(aPos, 1.0);
 }

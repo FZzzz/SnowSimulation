@@ -8,7 +8,7 @@ Renderer::Renderer() :
 	m_viewport_width(1600),
 	m_viewport_height(900),
 	m_clear_color(0.15f, 0.15f, 0.15f, 0),
-	m_point_size(50.f),
+	m_point_size(30.f),
 	m_ubo(-1),
 	m_b_sph_visibility(true),
 	m_b_dem_visibility(true),
@@ -47,6 +47,7 @@ void Renderer::InitializeSSFRBuffers()
 {
 	m_rtt_scene.SetupColorAttachment(m_viewport_width, m_viewport_height, true);
 	m_rtt_depth.SetupDepthAttachment(m_viewport_width, m_viewport_height);
+	m_rtt_scene_depth.SetupDepthAttachment(m_viewport_width, m_viewport_height);
 	m_rtt_blurX.SetupDepthAttachment(m_viewport_width, m_viewport_height);
 	m_rtt_blurY.SetupDepthAttachment(m_viewport_width, m_viewport_height);
 	m_rtt_thickness.SetupColorAttachment(m_viewport_width, m_viewport_height);
@@ -93,10 +94,11 @@ void Renderer::Render()
 	ClearBuffer();
 	glViewport(0, 0, m_viewport_width, m_viewport_height);
 	//RenderObjects();
-	RenderParticles();
+	RenderScene();
 	
 	if (m_b_sph_visibility && m_b_render_fluid)
 	{
+		RenderSceneDepth();
 		RenderFluidDepth();
 		SmoothDepth();
 		RenderThickness();
@@ -197,9 +199,91 @@ void Renderer::RenderObjects()
 	}
 }
 
-void Renderer::RenderParticles()
+void Renderer::RenderGameObject(const std::shared_ptr<Shader>& shader, const std::shared_ptr<Mesh>& mesh, const Transform& transform)
 {
+	if (!m_mainCamera)
+		return;
 
+	if (!mesh)
+	{
+		std::cout << "No Mesh to Render\n";
+		return;
+	}
+	//mesh->Render();
+
+	//shadow mapping shader
+	const glm::mat4 pvm = m_mainCamera->m_cameraMat * transform.getModelMatWorld();
+	//shader->SetUniformMat4("pvm", pvm);
+	shader->SetUniformMat4("modelMat", transform.getModelMatWorld());
+	//shader->SetUniformMat4("lightSpaceMatrix", light_mat);
+
+	// shadow map configuration
+	shader->SetUniformInt("shadowMap", 0);
+	shader->SetUniformVec3("lightPos", m_mainCamera->m_position);
+	shader->SetUniformVec3("viewPos", m_mainCamera->m_position);
+
+	//glBindTexture(GL_TEXTURE_2D, m_depthMap);
+	//glActiveTexture(GL_TEXTURE0);
+	//glBindTexture(GL_TEXTURE_2D, m_depthMap);
+
+	glBindVertexArray(mesh->getVAO());
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->getEBO());
+	glDrawElements(
+		GL_TRIANGLES,
+		static_cast<unsigned int>(mesh->getNumberOfIndices()),
+		GL_UNSIGNED_INT,
+		0);
+	glBindVertexArray(0);
+}
+
+void Renderer::RenderGameObjectDepth(const std::shared_ptr<Shader>& shader, const std::shared_ptr<Mesh>& mesh, const Transform& transform)
+{
+	if (!m_mainCamera)
+		return;
+
+	if (!mesh)
+	{
+		std::cout << "No Mesh to Render\n";
+		return;
+	}
+	//mesh->Render();
+
+	//shadow mapping shader
+	const glm::mat4 pvm = m_mainCamera->m_cameraMat * transform.getModelMatWorld();
+	shader->SetUniformMat4("pvm", pvm);
+
+	// render
+	glBindVertexArray(mesh->getVAO());
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->getEBO());
+	glDrawElements(
+		GL_TRIANGLES,
+		static_cast<unsigned int>(mesh->getNumberOfIndices()),
+		GL_UNSIGNED_INT,
+		0);
+	glBindVertexArray(0);
+}
+
+void Renderer::RenderObjectsDepth()
+{
+	const auto obj_vec = m_resource_manager->getObjects();
+	const auto static_obj_vec = m_resource_manager->getStaticObjects();
+	const auto shader = m_resource_manager->FindShaderByName("SimpleDepth");
+	
+	shader->Use();
+	
+	for (auto obj_it = obj_vec.cbegin(); obj_it != obj_vec.cend(); ++obj_it)
+	{
+		RenderGameObjectDepth(shader, (*obj_it)->getMesh(), (*obj_it)->m_transform);
+	}
+
+	for (auto obj_it = static_obj_vec.cbegin(); obj_it != static_obj_vec.cend(); ++obj_it)
+	{
+		RenderGameObjectDepth(shader, (*obj_it)->getMesh(), (*obj_it)->m_transform);
+	}
+}
+
+void Renderer::RenderScene()
+{
 	// Good habbit to reset :>
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, m_viewport_width, m_viewport_height);
@@ -313,44 +397,89 @@ void Renderer::RenderParticles()
 
 	// disable when not using 
 	glDisable(GL_VERTEX_PROGRAM_POINT_SIZE);
-	//glDisable(GL_POINT_SPRITE);
+
+	RenderObjects();
 }
 
-void Renderer::RenderGameObject(const std::shared_ptr<Shader>& shader, const std::shared_ptr<Mesh>& mesh, const Transform& transform)
+void Renderer::RenderSceneDepth()
 {
-	if (!m_mainCamera)
-		return;
+	// Good habbit to reset :>
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, m_viewport_width, m_viewport_height);
 
-	if (!mesh)
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClearColor(m_clear_color.r, m_clear_color.g, m_clear_color.b, m_clear_color.a);
+
+	const glm::mat4 pvm = m_mainCamera->m_cameraMat * glm::mat4(1);
+	const glm::mat4 model_view = m_mainCamera->m_lookAt * glm::mat4(1);
+
+	// Get shaders
+	const std::shared_ptr<Shader> shader = m_resource_manager->FindShaderByName("PointDepth");
+
+	shader->Use();
+
+	// set uniforms
+	shader->SetUniformMat4("pvm", pvm);
+	shader->SetUniformFloat("point_size", m_point_size);
+	shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
+	shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
+	shader->SetUniformMat4("model_view", model_view);
+
+	// enable opengl functions
+	glEnable(GL_VERTEX_PROGRAM_POINT_SIZE);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+
+	// bind scene depth map fbo
+	glBindFramebuffer(GL_FRAMEBUFFER, m_rtt_scene_depth.m_fbo);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+
+	if (m_b_dem_visibility)
 	{
-		std::cout << "No Mesh to Render\n";
-		return;
+		// dem particles
+		const ParticleSet* const dem_particles = m_particle_system->getDEMParticles();
+#ifdef _DEBUG
+		assert(shader);
+#endif
+		// set point color
+		if (!m_b_use_temperature_shader)
+			shader->SetUniformVec3("point_color", glm::vec3(0.75f, 0.75f, 0.75f));
+
+
+		// render
+		glBindVertexArray(m_particle_system->getDEMVAO());
+		glDrawArrays(GL_POINTS, 0, m_particle_system->getDEMParticles()->m_size);
+		glBindVertexArray(0);
 	}
-	//mesh->Render();
+	else
+	{
+		// if the dem visibility is set to false but still rendering fluid, render nothing to scene fbo
+		if (m_b_render_fluid)
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, m_rtt_scene.m_fbo);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	//shadow mapping shader
-	const glm::mat4 pvm = m_mainCamera->m_cameraMat * transform.getModelMatWorld();
-	//shader->SetUniformMat4("pvm", pvm);
-	shader->SetUniformMat4("modelMat", transform.getModelMatWorld());
-	//shader->SetUniformMat4("lightSpaceMatrix", light_mat);
+			//render nothing
+			glBindVertexArray(m_particle_system->getDEMVAO());
+			glDrawArrays(GL_POINTS, 0, 0);
+			glBindVertexArray(0);
+		}
+	}
 
-	// shadow map configuration
-	shader->SetUniformInt("shadowMap", 0);
-	shader->SetUniformVec3("lightPos", m_mainCamera->m_position);
-	shader->SetUniformVec3("viewPos", m_mainCamera->m_position);
+	if (m_b_boundary_visibility)
+	{
+		// render boundary particles
+		const ParticleSet* const boundary_particles = m_particle_system->getBoundaryParticles();
+		
+		glBindVertexArray(m_particle_system->getBoundaryVAO());
+		glDrawArrays(GL_POINTS, 0, m_particle_system->getBoundaryParticles()->m_size);
+		glBindVertexArray(0);
+	}
+	// disable when not using 
+	glDisable(GL_VERTEX_PROGRAM_POINT_SIZE);
 
-	//glBindTexture(GL_TEXTURE_2D, m_depthMap);
-	//glActiveTexture(GL_TEXTURE0);
-	//glBindTexture(GL_TEXTURE_2D, m_depthMap);
-
-	glBindVertexArray(mesh->getVAO());
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->getEBO());
-	glDrawElements(
-		GL_TRIANGLES,
-		static_cast<unsigned int>(mesh->getNumberOfIndices()),
-		GL_UNSIGNED_INT,
-		0);
-	glBindVertexArray(0);
+	RenderObjectsDepth();
 }
 
 void Renderer::RenderFluidDepth()
@@ -488,6 +617,7 @@ void Renderer::RenderThickness()
 	shader->SetUniformMat4("model_view", model_view);
 	shader->SetUniformMat4("pvm", pvm);
 	shader->SetUniformFloat("point_size", m_point_size);
+	shader->SetUniformFloat("thickness_unit", 0.1f);
 
 	// Enable functions
 	glEnable(GL_BLEND);
@@ -539,13 +669,18 @@ void Renderer::RenderFluid()
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, m_rtt_scene.m_texture);
 
+	// scene depth texture
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, m_rtt_scene_depth.m_texture);
+
 	// set uniforms
 	const glm::mat4 pvm = m_mainCamera->m_cameraMat * glm::mat4(1);
 	glm::mat4 model_view = m_mainCamera->m_lookAt * glm::mat4(1);
 	shader->SetUniformInt("depth_map", 0);
 	shader->SetUniformInt("thickness_map", 1);
 	shader->SetUniformInt("scene_map", 2);
-	shader->SetUniformVec4("light_color", glm::vec4(1));
+	shader->SetUniformInt("scene_depth_map", 3);
+	shader->SetUniformVec4("light_color", glm::vec4(1,1,1,0.8f));
 	shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
 	shader->SetUniformMat4("projection", m_mainCamera->m_projection);
 	shader->SetUniformMat4("model_view", model_view);

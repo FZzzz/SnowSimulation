@@ -2,6 +2,8 @@
 
 in vec3 eye_space_pos;
 
+uniform float thickness_unit;
+
 out float thickness;
 
 void main()
