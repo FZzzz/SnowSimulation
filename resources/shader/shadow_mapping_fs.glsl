@@ -66,7 +66,7 @@ void main()
     // diffuse
     vec3 lightDir = normalize(lightPos - fs_in.FragPos);
     //vec3 lightDir = normalize(vec3(5.0f , 5.0f , 5.0f));
-    float diff = max(dot(lightDir, normal), 0.0);
+    float diff = max(dot(lightDir, normal), 0.0) * 0.5f;
     vec3 diffuse = diff * lightColor;
     // specular
     vec3 viewDir = normalize(viewPos - fs_in.FragPos);

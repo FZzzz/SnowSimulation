@@ -98,11 +98,11 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	}
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_MULTISAMPLE);
-	glEnable(GL_BLEND);
-	glEnable(GL_PROGRAM_POINT_SIZE);
+	//glEnable(GL_BLEND);
+	glEnable(GL_VERTEX_PROGRAM_POINT_SIZE);
 	glEnable(GL_POINT_SPRITE); 
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glDepthFunc(GL_LESS);
+	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	//glDepthFunc(GL_LESS);
 
 	/* ResourceManager Creation */
 	m_resource_manager = std::make_shared<ResourceManager>();
@@ -137,6 +137,9 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	point_temp_shader->SetupShader("resources/shader/point_sprite_temperature_vs.glsl",
 		"resources/shader/point_sprite_fs.glsl");
 
+	std::shared_ptr<Shader> simple_depth_shader = std::make_shared<Shader>("SimpleDepth");
+	simple_depth_shader->SetupShader("resources/shader/simple_depth_vs.glsl",
+		"resources/shader/simple_depth_fs.glsl");
 	
 	std::shared_ptr<Shader> point_depth_shader = std::make_shared<Shader>("PointDepth");
 	point_depth_shader->SetupShader("resources/shader/point_depth_vs.glsl",
@@ -145,6 +148,14 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	std::shared_ptr<Shader> depth_smooth_shader = std::make_shared<Shader>("DepthSmooth");
 	depth_smooth_shader->SetupShader("resources/shader/bilateral_vs.glsl",
 		"resources/shader/bilateral_fs.glsl");
+
+	std::shared_ptr<Shader> thickness_shader = std::make_shared<Shader>("Thickness");
+	thickness_shader->SetupShader("resources/shader/ssfr_thickness_vs.glsl",
+		"resources/shader/ssfr_thickness_fs.glsl");
+
+	std::shared_ptr<Shader> fluid_shader = std::make_shared<Shader>("SSFR_Fluid");
+	fluid_shader->SetupShader("resources/shader/ssfr_fluid_vs.glsl",
+		"resources/shader/ssfr_fluid_fs.glsl");
 
 
 	auto mat_uniform = glGetUniformBlockIndex(shadow_mapping_shader->getProgram(), "Matrices");
@@ -193,24 +204,10 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	
 		
 	// Terrain Initilization
-	{
-		
+	{	
 		std::shared_ptr<Plane> plane_terrain = std::make_shared<Plane>();
 		plane_terrain->Initialize(glm::vec3(0, 0, 0), shadow_mapping_shader);
 		m_resource_manager->AddGameObject(static_pointer_cast<GameObject>(plane_terrain));
-		m_simulator->AddCollider(plane_terrain->getCollider());
-		
-		
-		auto collider = new PlaneCollider(glm::vec3(1, 0, 0), -10);
-		m_simulator->AddCollider(collider);
-		
-		collider = new PlaneCollider(glm::vec3(-1, 0, 0), -10);
-		m_simulator->AddCollider(collider);
-		collider = new PlaneCollider(glm::vec3(0, 0, 1), -15 );
-		m_simulator->AddCollider(collider);
-		collider = new PlaneCollider(glm::vec3(0, 0, -1), 1);
-		m_simulator->AddCollider(collider);
-		
 	}
 
 	//GenerateRadomParticles();
@@ -342,10 +339,10 @@ void Key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 			break;
 		}
 
-		case GLFW_KEY_P:
+		case GLFW_KEY_F:
 		{			
 			auto renderer = instance->getRenderer();
-			renderer->SwitchDepthSmooth();
+			renderer->SwtichRenderFluid();
 			break;
 		}
 		}

@@ -33,6 +33,7 @@ public:
 	void SetUniformMat4(const std::string& name, const glm::mat4& mat);
 	void SetUniformVec2(const std::string& name, const glm::vec2& v);
 	void SetUniformVec3(const std::string& name, const glm::vec3& v);
+	void SetUniformVec4(const std::string& name, const glm::vec4& v);
 
 	void SetUniformInt(const std::string& name, const GLint value);
 	void SetUniformFloat(const std::string& name, const float value);

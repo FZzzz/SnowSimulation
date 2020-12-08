@@ -443,6 +443,15 @@ void Shader::SetUniformVec3(const std::string & name, const glm::vec3 & vec)
 	glUniform3fv(loc, 1, glm::value_ptr(vec));
 }
 
+void Shader::SetUniformVec4(const std::string& name, const glm::vec4& v)
+{
+	GLint loc = glGetUniformLocation(m_program, name.c_str());
+	if (loc == -1)
+		return;
+
+	glUniform4fv(loc, 1, glm::value_ptr(v));
+}
+
 void Shader::SetUniformInt(const std::string & name, const GLint value)
 {
 	GLint loc = glGetUniformLocation(m_program, name.c_str());

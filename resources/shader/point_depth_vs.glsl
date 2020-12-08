@@ -4,12 +4,9 @@ layout (location = 0) in vec3 aPos;
 
 uniform mat4 pvm;
 uniform float point_size;
-uniform vec3 light_pos;
 uniform vec3 camera_pos;
 uniform mat4 view;
-uniform vec3 point_color;
 uniform mat4 model_view;
-uniform float sphere_radius;
 
 
 //out vec3 light_dir;

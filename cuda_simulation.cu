@@ -4533,13 +4533,13 @@ void phase_change(
 inline __device__
 float3 compute_interlink_correction(ParticleDeviceData& data, uint index0, uint index1, float connect_length)
 {
+	float3 result = make_float3(0, 0, 0);
 	if (index0 == index1)
 	{
 		printf("Invalid computation at index: %u (compute_interlink_correction)\n", index0);
-		return;
+		return result;
 	}
-		
-	float3 result = make_float3(0, 0, 0);
+	 
 	const float3 pos0 = data.m_d_predict_positions[index0];
 	const float3 pos1 = data.m_d_predict_positions[index1];
 	const float3 v = pos0 - pos1;

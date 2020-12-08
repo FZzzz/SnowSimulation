@@ -13,7 +13,7 @@ namespace GLFunctions
 	//void SetUniformVec3(const std::string& name, const glm::vec3& mat, const GLuint program);
 	//void SetUniformInt(const std::string& name, const GLint value, const GLuint program);
 	
-	GLuint LoadTexture(GLchar* path, GLboolean alpha);
+	GLuint LoadTexture(const GLchar* path, GLboolean alpha);
 	
 };
 

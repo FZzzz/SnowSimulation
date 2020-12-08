@@ -30,7 +30,7 @@ void GLFunctions::SetUniformInt(const std::string & name, const GLint value, con
 }
 */
 
-GLuint GLFunctions::LoadTexture(GLchar * path, GLboolean alpha)
+GLuint GLFunctions::LoadTexture(const GLchar * path, GLboolean alpha)
 {
 	//Generate texture ID and load texture data 
 	GLuint textureID;
