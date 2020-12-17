@@ -176,6 +176,7 @@
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="ResourceManager.cpp" />
     <ClCompile Include="Rigidbody.cpp" />
+    <ClCompile Include="rx_files\rx_mc_cpu.cpp" />
     <ClCompile Include="Shader.cpp" />
     <ClCompile Include="Simulation.cpp" />
     <ClCompile Include="Transform.cpp" />
@@ -214,6 +215,9 @@
     <ClInclude Include="RenderTargetTexture.h" />
     <ClInclude Include="ResourceManager.h" />
     <ClInclude Include="Rigidbody.h" />
+    <ClInclude Include="rx_files\rx_mc.h" />
+    <ClInclude Include="rx_files\rx_mc_tables.h" />
+    <ClInclude Include="rx_files\rx_mesh.h" />
     <ClInclude Include="Shader.h" />
     <ClInclude Include="SimParams.h" />
     <ClInclude Include="Simulation.h" />

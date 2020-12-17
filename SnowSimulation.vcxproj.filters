@@ -46,6 +46,9 @@
     <Filter Include="Source Files\Engine\imgui">
       <UniqueIdentifier>{e0e6aa09-fde6-44a0-a9d0-009f0c6d96b9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="rx_files">
+      <UniqueIdentifier>{86a21c05-a411-4d50-b85c-30dc8395f28b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="GLFWApp.cpp">
@@ -140,6 +143,9 @@
     </ClCompile>
     <ClCompile Include="imgui\imgui_impl_glfw_gl3.cpp">
       <Filter>Source Files\Engine\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="rx_files\rx_mc_cpu.cpp">
+      <Filter>rx_files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -262,6 +268,15 @@
     </ClInclude>
     <ClInclude Include="RenderTargetTexture.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="rx_files\rx_mc.h">
+      <Filter>rx_files</Filter>
+    </ClInclude>
+    <ClInclude Include="rx_files\rx_mc_tables.h">
+      <Filter>rx_files</Filter>
+    </ClInclude>
+    <ClInclude Include="rx_files\rx_mesh.h">
+      <Filter>rx_files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
