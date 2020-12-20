@@ -15,7 +15,8 @@ Renderer::Renderer() :
 	m_b_boundary_visibility(false),
 	//m_b_smooth_depth(false),
 	m_b_render_fluid(true),
-	m_b_use_temperature_shader(false)
+	m_b_use_temperature_shader(false),
+	m_b_use_mc_mesh(false)
 {
 }
 
@@ -93,16 +94,24 @@ void Renderer::Render()
 {
 	ClearBuffer();
 	glViewport(0, 0, m_viewport_width, m_viewport_height);
-	//RenderObjects();
-	RenderScene();
-	
-	if (m_b_sph_visibility && m_b_render_fluid)
+
+	if (m_b_use_mc_mesh)
 	{
-		RenderSceneDepth();
-		RenderFluidDepth();
-		SmoothDepth();
-		RenderThickness();
-		RenderFluid();
+
+	}
+	else
+	{
+		//RenderObjects();
+		RenderScene();
+
+		if (m_b_sph_visibility && m_b_render_fluid)
+		{
+			RenderSceneDepth();
+			RenderFluidDepth();
+			SmoothDepth();
+			RenderThickness();
+			RenderFluid();
+		}
 	}
 	
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -128,10 +137,19 @@ void Renderer::SwitchTemperatureShader()
 	m_b_use_temperature_shader = !m_b_use_temperature_shader;
 }
 
-void Renderer::SwtichRenderFluid()
+void Renderer::SwitchRenderFluid()
 {
 	m_b_render_fluid = !m_b_render_fluid;
 	std::cout << "Status: " << ((m_b_render_fluid) ? "On" : "Off") << std::endl;
+}
+
+void Renderer::SwitchMCMeshRender()
+{
+	m_b_use_mc_mesh = !m_b_use_mc_mesh;
+}
+
+void Renderer::SetUpFluidMeshInfo(const std::vector<glm::vec3>& vert_pos, const std::vector<glm::vec3>& vert_normal, const std::vector<unsigned int>& indices)
+{
 }
 
 /*
@@ -691,4 +709,8 @@ void Renderer::RenderFluid()
 	glBindVertexArray(m_screen_vao);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	glBindVertexArray(0);
+}
+
+void Renderer::RenderSceneWithMCMesh()
+{
 }

@@ -17,6 +17,8 @@
 #include "GameObject.h"
 #include "Plane.h"
 
+#include "rx_files/rx_mesh.h"
+
 void Error_callback(int error, const char* description);
 void Key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void Mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
@@ -33,12 +35,14 @@ GLFWApp* GLFWApp::appInstance;
 GLFWApp::GLFWApp() : 
 	m_previousTime(0), 
 	m_currentTime(0), 
-	m_app_status(true),
+	m_b_app_status(true),
 	m_resource_manager(nullptr),
 	m_gui_manager(nullptr),
 	m_mainCamera(nullptr),
 	m_renderer(nullptr),
-	m_mouse_pressed(false),
+	m_rx_mc_mesh(nullptr),
+	m_b_mouse_pressed(false),
+	m_b_mesh_generated(false),
 	m_frame_count(0)
 {
 }
@@ -271,6 +275,45 @@ void GLFWApp::Run()
 	glfwTerminate();
 }
 
+void GLFWApp::GenerateMesh()
+{
+	std::cout << "Generating mesh... " << std::endl;
+	std::vector<glm::vec3> fluid_pos;
+	size_t num_particles; 
+
+	// grab vertices info from CUDA
+	m_simulator->DumpVerticesInfo(fluid_pos, num_particles);
+
+	if (m_rx_mc_mesh == nullptr)
+		m_rx_mc_mesh = std::make_shared<rxMCMeshCPU>();
+	
+
+	std::vector<Vec3> vert_pos;
+	std::vector<Vec3> vert_normal;
+	std::vector<rxFace> faces;
+	std::vector<unsigned int> indices;
+
+	Vec3 minp, maxp;
+	const int nmax = 64 * 64 * 64;
+	int n[3] = { 64, 64, 64 };
+
+	float h = m_simulator->getSimParams()->effective_radius;
+
+	const float threshold = 300;
+
+	CalMeshDiv(minp, maxp, nmax, h, n, 0.05);
+
+	// use marching cubes to create mesh info
+	m_rx_mc_mesh->CreateMesh(0, 0, minp, h, n, threshold, fluid_pos, vert_normal, faces);
+
+	// extract indices from faces (or we do offset later when update...)
+	
+	// upload to GPU (GL)
+	m_renderer->SetUpFluidMeshInfo(vert_pos, vert_normal, indices);
+	
+	std::cout << "Mesh generated!!" << std::endl;
+}
+
 
 void GLFWApp::ReleaseResources()
 {
@@ -280,7 +323,7 @@ void GLFWApp::ReleaseResources()
 
 void GLFWApp::SignalFail()
 {
-	m_app_status = false;
+	m_b_app_status = false;
 }
 
 float GLFWApp::getElapsedTime()
@@ -311,7 +354,14 @@ void Key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		case GLFW_KEY_SPACE:
 		{
 			auto simulator = instance->getSimulator();
+			auto renderer = instance->getRenderer();
 			simulator->Pause();
+			// if proceeding next frame, free the lock on mesh generation
+			if (simulator->isPause()) 
+			{ 
+				instance->m_b_mesh_generated = false; 
+				renderer->m_b_use_mc_mesh = (renderer->m_b_use_mc_mesh) ? false: true;
+			}
 			break;
 		}
 		case GLFW_KEY_T:
@@ -342,7 +392,19 @@ void Key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		case GLFW_KEY_F:
 		{			
 			auto renderer = instance->getRenderer();
-			renderer->SwtichRenderFluid();
+			renderer->SwitchRenderFluid();
+			break;
+		}
+		case GLFW_KEY_M:
+		{
+			auto renderer = instance->getRenderer();
+			auto simulator = instance->getSimulator();
+			simulator->Pause();
+			if (simulator->isPause() && !instance->m_b_mesh_generated)
+			{
+				renderer->m_b_use_mc_mesh = true;
+				instance->GenerateMesh();
+			}
 			break;
 		}
 		}
@@ -393,12 +455,12 @@ void Mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		{
 			instance->m_mouse_last_x = static_cast<float>(x_pos);
 			instance->m_mouse_last_y = static_cast<float>(y_pos);
-			instance->m_mouse_pressed = true;
+			instance->m_b_mouse_pressed = true;
 
 		}
 		else if (action == GLFW_RELEASE)
 		{
-			instance->m_mouse_pressed = false;
+			instance->m_b_mouse_pressed = false;
 		}
 	}
 
@@ -407,7 +469,7 @@ void Mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 void Mouse_cursor_callback(GLFWwindow* window, double xpos, double ypos)
 {
 	auto instance = GLFWApp::getInstance();
-	if (instance->m_mouse_pressed)
+	if (instance->m_b_mouse_pressed)
 	{
 		auto camera = instance->getMainCamera();
 

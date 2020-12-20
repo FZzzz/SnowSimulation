@@ -83,7 +83,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(ProjectDir)include;$(ProjectDir)include\cuda_common;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)include;$(ProjectDir)include\cuda_common;E:\Workspace\SnowSimulation\rx_files\inc;$(IncludePath)</IncludePath>
     <LibraryPath>$(ProjectDir)lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -168,6 +168,8 @@
     <ClCompile Include="Light.cpp" />
     <ClCompile Include="LightSystem.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="MarchingCubes.cpp" />
+    <ClCompile Include="marching_cubes.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="NeighborSearch.cpp" />
     <ClCompile Include="Particle.cpp" />
@@ -177,6 +179,7 @@
     <ClCompile Include="ResourceManager.cpp" />
     <ClCompile Include="Rigidbody.cpp" />
     <ClCompile Include="rx_files\rx_mc_cpu.cpp" />
+    <ClCompile Include="rx_files\rx_mc_gpu.cpp" />
     <ClCompile Include="Shader.cpp" />
     <ClCompile Include="Simulation.cpp" />
     <ClCompile Include="Transform.cpp" />
@@ -191,6 +194,8 @@
     <ClInclude Include="common.h" />
     <ClInclude Include="Constraints.h" />
     <ClInclude Include="ConstraintSolver.h" />
+    <ClInclude Include="cuda_sample_files\defines.h" />
+    <ClInclude Include="cuda_sample_files\tables.h" />
     <ClInclude Include="cuda_simulation.cuh" />
     <ClInclude Include="GameObject.h" />
     <ClInclude Include="GLFunctions.h" />
@@ -206,6 +211,7 @@
     <ClInclude Include="Joint.h" />
     <ClInclude Include="Light.h" />
     <ClInclude Include="LightSystem.h" />
+    <ClInclude Include="MarchingCubes.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="NeighborSearch.h" />
     <ClInclude Include="Particle.h" />
@@ -227,6 +233,7 @@
     <ClInclude Include="util.h" />
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="cuda_sample_files\marchingCubes_kernel.cu" />
     <CudaCompile Include="cuda_simulation.cu" />
     <CudaCompile Include="cuda_tool.cu" />
   </ItemGroup>

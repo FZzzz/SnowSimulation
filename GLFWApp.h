@@ -17,6 +17,7 @@
 #include "GUIManager.h"
 #include "Simulation.h"
 #include "ParticleSystem.h"
+#include "rx_files/rx_mc.h"
 
 class GLFWApp
 {
@@ -26,6 +27,9 @@ public:
 	
 	bool Initialize(int width , int height , const std::string &title);
 	void Run();
+	
+	void GenerateMesh();
+
 	void ReleaseResources();
 	
 	static GLFWApp* getInstance() {
@@ -40,7 +44,7 @@ public:
 	inline const std::shared_ptr<Renderer> getRenderer() { return m_renderer; }
 	inline const std::shared_ptr<Simulation> getSimulator() { return m_simulator; }
 	inline const std::shared_ptr<Camera> getMainCamera() { return m_mainCamera; };
-	inline bool GetAppStatus() { return m_app_status; };
+	inline bool GetAppStatus() { return m_b_app_status; };
 	
 	/*virtual functions*/
 	virtual float getElapsedTime();
@@ -48,9 +52,12 @@ public:
 	/* Mouse controls */
 	float m_mouse_last_x;
 	float m_mouse_last_y;
-	bool m_mouse_pressed;
+	bool m_b_mouse_pressed;
+
+	bool m_b_mesh_generated;
 
 	unsigned int m_frame_count;
+
 
 private:
 	
@@ -77,6 +84,8 @@ private:
 	std::shared_ptr<Camera> m_mainCamera;
 	std::shared_ptr<Renderer> m_renderer;
 	
+	std::shared_ptr<rxMCMeshCPU> m_rx_mc_mesh;
+
 	/* Timer */
 	std::chrono::high_resolution_clock::time_point t0, t1, t2, t3, t4;
 
@@ -90,7 +99,7 @@ private:
 	//void Frame_Status_GUI();
 	//void Object_Viewer_GUI();
 
-	bool m_app_status;
+	bool m_b_app_status;
 };
 
 #endif

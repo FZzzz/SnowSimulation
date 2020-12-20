@@ -38,6 +38,7 @@ public:
 	void AddStaticConstraints(std::vector<Constraint*> constraints);
 	void SetSolverIteration(uint32_t iter_count);
 
+	void DumpVerticesInfo(std::vector<glm::vec3>& pos, size_t& num_vert);
 
 	void Pause();
 

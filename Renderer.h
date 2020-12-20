@@ -37,11 +37,21 @@ public:
 	void SwitchBoundaryVisibility();
 	void SwitchTemperatureShader();
 	//void SwitchDepthSmooth();
-	void SwtichRenderFluid();
+	void SwitchRenderFluid();
+	void SwitchMCMeshRender();
+	
+	void SetUpFluidMeshInfo(
+		const std::vector<glm::vec3>& vert_pos, 
+		const std::vector<glm::vec3>& vert_normal,
+		const std::vector<unsigned int>& indices
+	);
 
 	// setters
 	void setMainCamera(std::shared_ptr<Camera> camera);
 	void setClearColor(glm::vec4 clear_color);
+
+
+	bool m_b_use_mc_mesh;
 
 private:
 
@@ -75,6 +85,8 @@ private:
 	void SmoothDepth();
 	void RenderThickness();
 	void RenderFluid();
+
+	void RenderSceneWithMCMesh();
 
 
 	std::shared_ptr<Camera> m_mainCamera;
@@ -115,6 +127,7 @@ private:
 	bool m_b_render_fluid;
 
 	bool m_b_use_temperature_shader;
+
 
 
 	GLuint debug_texture;

@@ -53,8 +53,8 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_solver = std::make_shared<ConstraintSolver>(mode);
 
 	SetupSimParams();
-	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, false);
-	GenerateParticleCube(snow_half_extends, snow_origin, 1, false);
+	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, true);
+	GenerateParticleCube(snow_half_extends, snow_origin, 1, true);
 	InitializeTemperature(m_particle_system->getSPHParticles()->m_temperature, sph_temperature);
 	InitializeTemperature(m_particle_system->getDEMParticles()->m_temperature, dem_temperature);
 	AppendParticleSets();
@@ -270,6 +270,28 @@ void Simulation::SetSolverIteration(uint32_t iter_count)
 	std::cout << "Iterations: " << iter_count << std::endl;
 	m_solver->setSolverIteration(iter_count);
 	m_iterations = iter_count;
+}
+
+void Simulation::DumpVerticesInfo(std::vector<glm::vec3>& pos, size_t& num_vert)
+{
+	pos.clear();
+
+	ParticleSet* sph_particles = m_particle_system->getSPHParticles();
+	
+	// early termination
+	if (sph_particles->m_size < 1) return;
+	
+	// re-allocate vector size to match output
+	pos.resize(sph_particles->m_size);
+
+	// copy position info from device to host
+	cudaMemcpy(
+		(void*)sph_particles->m_device_data.m_d_positions,
+		(void*)pos.data(),
+		sph_particles->m_size * sizeof(float3),
+		cudaMemcpyDeviceToHost
+	);
+	
 }
 
 void Simulation::ComputeRestDensity()

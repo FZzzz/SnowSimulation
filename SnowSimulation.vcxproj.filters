@@ -49,6 +49,15 @@
     <Filter Include="rx_files">
       <UniqueIdentifier>{86a21c05-a411-4d50-b85c-30dc8395f28b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="CUDA_sample_files">
+      <UniqueIdentifier>{e0906849-6aa9-4fbc-988d-f0147ea8ff4d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="rx_files\Mesh files">
+      <UniqueIdentifier>{f4de019c-2bfb-4975-a1d1-48a8d062e4a4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="rx_files\SPH files">
+      <UniqueIdentifier>{ce81e6b9-c60f-4d9c-910b-cfca67972d86}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="GLFWApp.cpp">
@@ -144,8 +153,17 @@
     <ClCompile Include="imgui\imgui_impl_glfw_gl3.cpp">
       <Filter>Source Files\Engine\imgui</Filter>
     </ClCompile>
+    <ClCompile Include="marching_cubes.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MarchingCubes.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="rx_files\rx_mc_cpu.cpp">
-      <Filter>rx_files</Filter>
+      <Filter>rx_files\Mesh files</Filter>
+    </ClCompile>
+    <ClCompile Include="rx_files\rx_mc_gpu.cpp">
+      <Filter>rx_files\Mesh files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -269,14 +287,23 @@
     <ClInclude Include="RenderTargetTexture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="cuda_sample_files\defines.h">
+      <Filter>CUDA_sample_files</Filter>
+    </ClInclude>
+    <ClInclude Include="cuda_sample_files\tables.h">
+      <Filter>CUDA_sample_files</Filter>
+    </ClInclude>
+    <ClInclude Include="MarchingCubes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="rx_files\rx_mc.h">
-      <Filter>rx_files</Filter>
+      <Filter>rx_files\Mesh files</Filter>
     </ClInclude>
     <ClInclude Include="rx_files\rx_mc_tables.h">
-      <Filter>rx_files</Filter>
+      <Filter>rx_files\Mesh files</Filter>
     </ClInclude>
     <ClInclude Include="rx_files\rx_mesh.h">
-      <Filter>rx_files</Filter>
+      <Filter>rx_files\Mesh files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -285,6 +312,9 @@
     </CudaCompile>
     <CudaCompile Include="cuda_tool.cu">
       <Filter>CUDA Files</Filter>
+    </CudaCompile>
+    <CudaCompile Include="cuda_sample_files\marchingCubes_kernel.cu">
+      <Filter>CUDA_sample_files</Filter>
     </CudaCompile>
   </ItemGroup>
 </Project>

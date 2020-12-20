@@ -31,8 +31,9 @@
 
 #include <iostream>
 
-#include <glm/glm.hpp>
-//#include "rx_utility.h"
+//#include <glm/glm.hpp>
+#include <cuda_runtime.h>
+#include "rx_utility.h"
 #include "rx_mesh.h"
 
 
@@ -47,7 +48,7 @@ using namespace std;
 // 定義
 //-----------------------------------------------------------------------------
 typedef unsigned int uint;
-using Vec3 = glm::vec3;
+//using Vec3 = glm::vec3;
 
 
 #ifndef RXREAL
@@ -175,7 +176,7 @@ protected:
 
 };
 
-/* 
+
 // Not using
 //-----------------------------------------------------------------------------
 // rxMCMeshGPUクラス
@@ -345,9 +346,6 @@ public:
 
 #endif // #ifdef RX_CUMC_USE_GEOMETRY
 };
-*/
-
-
 
 
 /*!

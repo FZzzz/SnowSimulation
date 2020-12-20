@@ -28,9 +28,9 @@
 
 using namespace std;
 
-using Vec2 = glm::vec2;
-using Vec3 = glm::vec3;
-using Vec4 = glm::vec4;
+//using Vec2 = glm::vec2;
+//using Vec3 = glm::vec3;
+//using Vec4 = glm::vec4;
 
 //-----------------------------------------------------------------------------
 // 材質クラス
@@ -103,41 +103,29 @@ public:
 	}
 };
 
-// 三角形ポリゴン
-class rxTriangle : public rxFace
+
+inline int CalMeshDiv(Vec3& minp, const Vec3 maxp, const int nmax, float& h, int n[3], float extend)
 {
-public:
-	rxTriangle()
-	{
-		vert_idx.resize(3);
+	Vec3 l = maxp - minp;
+	minp -= 0.5f * extend * l;
+	l *= 1.0 + extend;
+
+	float max_l = 0;
+	int max_axis = 0;
+	for (int i = 0; i < 3; ++i) {
+		if (l[i] > max_l) {
+			max_l = l[i];
+			max_axis = i;
+		}
 	}
-};
 
-// ポリゴンオブジェクト
-class rxPolygons
-{
-public:
-	vector<Vec3> vertices;	//!< 頂点座標
-	vector<Vec3> normals;	//!< 頂点法線
-	vector<rxFace> faces;	//!< ポリゴン
-	rxMTL materials;		//!< 材質
-	int open;				//!< ファイルオープンフラグ
+	h = max_l / nmax;
+	for (int i = 0; i < 3; ++i) {
+		n[i] = (int)(l[i] / h) + 1;
+	}
 
-public:
-	//! コンストラクタ
-	rxPolygons() : open(0) {}
-	//! デストラクタ
-	~rxPolygons(){}
-
-	//! 描画
-	void Draw(int draw = 0x04, double dn = 0.02, bool col = true);
-
-protected:
-	//! double版の材質設定
-	void glMaterialdv(GLenum face, GLenum pname, const GLdouble *params);
-};
-
-
+	return 0;
+}
 
 
 
