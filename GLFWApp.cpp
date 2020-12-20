@@ -5,6 +5,8 @@
 #include <ctime>
 #include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
+#include <partio/Partio.h>
+
 #include "imgui/imgui_impl_glfw_gl3.h"
 #ifdef _WIN32
 #undef APIENTRY
@@ -278,6 +280,63 @@ void GLFWApp::ReleaseResources()
 	m_particle_system->Release();
 }
 
+void GLFWApp::ExportBgeoFile()
+{
+	std::string path = "./results/frame_" + std::to_string(m_frame_count) + ".bgeo"; // + frame count
+
+	Partio::ParticlesDataMutable* p = Partio::create();
+	Partio::ParticleAttribute positionAttr = p->addAttribute("position", Partio::VECTOR, 3);
+	Partio::ParticleAttribute colorAttr = p->addAttribute("Cd", Partio::FLOAT, 3);
+	Partio::ParticleAttribute pScaleAttr = p->addAttribute("pscale", Partio::FLOAT, 1);
+	Partio::ParticleAttribute labelAttr = p->addAttribute("label", Partio::INT, 1);
+	
+	ParticleSet* fluid_particles = m_particle_system->getSPHParticles();
+	ParticleSet* solid_particles = m_particle_system->getDEMParticles();
+
+	std::vector<float3> cpu_sph_data;
+	std::vector<float3> cpu_dem_data;
+
+	size_t fluid_n = fluid_particles->m_size;
+	size_t solid_n = fluid_particles->m_size;
+
+	cpu_sph_data.resize(fluid_n);
+	cpu_dem_data.resize(solid_n);
+
+	cudaMemcpy(
+		(void*) cpu_sph_data.data(),
+		(void*) fluid_particles->m_device_data.m_d_positions,
+		fluid_n * sizeof(float3),
+		cudaMemcpyDeviceToHost
+	);
+
+	cudaMemcpy(
+		(void*)cpu_dem_data.data(),
+		(void*)solid_particles->m_device_data.m_d_positions,
+		fluid_n * sizeof(float3),
+		cudaMemcpyDeviceToHost
+	);
+
+	for (size_t i = 0; i < fluid_n; ++i)
+	{
+		int p_idx = p->addParticle();
+
+		float* pos = p->dataWrite<float>(positionAttr, p_idx);
+		//float* 
+
+		pos[0] = cpu_sph_data[i].x;
+		pos[1] = cpu_sph_data[i].y;
+		pos[2] = cpu_sph_data[i].z;
+	}
+
+	Partio::write(path.c_str(), *p);
+
+	p->release();
+	cpu_sph_data.clear();
+	cpu_dem_data.clear();
+
+	std::cout << "Bgeo file exported: " << path << std::endl;
+}
+
 void GLFWApp::SignalFail()
 {
 	m_app_status = false;
@@ -343,6 +402,12 @@ void Key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		{			
 			auto renderer = instance->getRenderer();
 			renderer->SwtichRenderFluid();
+			break;
+		}
+
+		case GLFW_KEY_M:
+		{
+			instance->ExportBgeoFile();
 			break;
 		}
 		}

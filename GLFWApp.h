@@ -28,6 +28,8 @@ public:
 	void Run();
 	void ReleaseResources();
 	
+	void ExportBgeoFile();
+
 	static GLFWApp* getInstance() {
 		if (!appInstance)
 			appInstance = new GLFWApp();

@@ -144,7 +144,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>glew32.lib;opengl32.lib;glfw3.lib;SOIL_debug.lib;assimp-vc141-md.lib;%(AdditionalDependencies);cudart.lib;cudadevrt.lib</AdditionalDependencies>
+      <AdditionalDependencies>glew32.lib;opengl32.lib;glfw3.lib;SOIL_debug.lib;assimp-vc141-md.lib;%(AdditionalDependencies);cudart.lib;cudadevrt.lib;partio.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
