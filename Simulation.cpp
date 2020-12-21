@@ -53,8 +53,8 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_solver = std::make_shared<ConstraintSolver>(mode);
 
 	SetupSimParams();
-	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, false);
-	GenerateParticleCube(snow_half_extends, snow_origin, 1, false);
+	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, true);
+	GenerateParticleCube(snow_half_extends, snow_origin, 1, true);
 	InitializeTemperature(m_particle_system->getSPHParticles()->m_temperature, sph_temperature);
 	InitializeTemperature(m_particle_system->getDEMParticles()->m_temperature, dem_temperature);
 	AppendParticleSets();
@@ -319,9 +319,9 @@ void Simulation::setClipLength(int length)
 void Simulation::SetupSimParams()
 {
 	//const size_t n_particles = 1000;
-	const float particle_mass = 0.0025f;
+	const float particle_mass = 0.0125f;
 	const float n_kernel_particles = 20.f;	
-	const float dem_sph_ratio = 2.0f;
+	const float dem_sph_ratio = 1.0f;
 	// water density = 1000 kg/m^3
 	m_rest_density = 1000.f; 
 	m_sph_particle_mass = particle_mass;
@@ -413,6 +413,9 @@ void Simulation::InitializeBoundaryParticles()
 	
 	// Initialize boundary particles
 	ParticleSet* particles = m_particle_system->AllocateBoundaryParticles();
+
+	// Set particle color 
+	particles->m_color = glm::vec3(1, 1, 1);
 
 	// Initialize positions
 	float x, y, z;
@@ -599,7 +602,7 @@ void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, 
 	else
 		return;
 	
-
+	particles->m_color = (opt == 0) ? glm::vec3(0.7f, 0.7f, 1.f): glm::vec3(0.85f, 0.85f, 0.85f);
 	std::cout << ((opt==0)?"SPH": "DEM") << " particles: " << n_particles << std::endl;
 	// set positions
 	size_t idx = 0;

@@ -41,7 +41,9 @@ GLFWApp::GLFWApp() :
 	m_mainCamera(nullptr),
 	m_renderer(nullptr),
 	m_mouse_pressed(false),
-	m_frame_count(0)
+	m_b_record(false),
+	m_frame_count(0),
+	m_record_clip_index(0)
 {
 }
 
@@ -282,59 +284,122 @@ void GLFWApp::ReleaseResources()
 
 void GLFWApp::ExportBgeoFile()
 {
-	std::string path = "./results/frame_" + std::to_string(m_frame_count) + ".bgeo"; // + frame count
-
-	Partio::ParticlesDataMutable* p = Partio::create();
-	Partio::ParticleAttribute positionAttr = p->addAttribute("position", Partio::VECTOR, 3);
-	Partio::ParticleAttribute colorAttr = p->addAttribute("Cd", Partio::FLOAT, 3);
-	Partio::ParticleAttribute pScaleAttr = p->addAttribute("pscale", Partio::FLOAT, 1);
-	Partio::ParticleAttribute labelAttr = p->addAttribute("label", Partio::INT, 1);
-	
-	ParticleSet* fluid_particles = m_particle_system->getSPHParticles();
-	ParticleSet* solid_particles = m_particle_system->getDEMParticles();
-
-	std::vector<float3> cpu_sph_data;
-	std::vector<float3> cpu_dem_data;
-
-	size_t fluid_n = fluid_particles->m_size;
-	size_t solid_n = fluid_particles->m_size;
-
-	cpu_sph_data.resize(fluid_n);
-	cpu_dem_data.resize(solid_n);
-
-	cudaMemcpy(
-		(void*) cpu_sph_data.data(),
-		(void*) fluid_particles->m_device_data.m_d_positions,
-		fluid_n * sizeof(float3),
-		cudaMemcpyDeviceToHost
-	);
-
-	cudaMemcpy(
-		(void*)cpu_dem_data.data(),
-		(void*)solid_particles->m_device_data.m_d_positions,
-		fluid_n * sizeof(float3),
-		cudaMemcpyDeviceToHost
-	);
-
-	for (size_t i = 0; i < fluid_n; ++i)
+	enum ParticleLabel
 	{
-		int p_idx = p->addParticle();
+		LABEL_FLUID = 0,
+		LABEL_RIGID = 1
+	};
 
-		float* pos = p->dataWrite<float>(positionAttr, p_idx);
-		//float* 
+	{
+		std::string path = "./results/frame_" + std::to_string(m_record_clip_index) + "_fluid.bgeo"; // + frame count
 
-		pos[0] = cpu_sph_data[i].x;
-		pos[1] = cpu_sph_data[i].y;
-		pos[2] = cpu_sph_data[i].z;
+		Partio::ParticlesDataMutable* p = Partio::create();
+		Partio::ParticleAttribute positionAttr = p->addAttribute("position", Partio::VECTOR, 3);
+		Partio::ParticleAttribute colorAttr = p->addAttribute("Cd", Partio::FLOAT, 3);
+		Partio::ParticleAttribute pScaleAttr = p->addAttribute("pscale", Partio::FLOAT, 1);
+		Partio::ParticleAttribute labelAttr = p->addAttribute("label", Partio::INT, 1);
+
+		ParticleSet* fluid_particles = m_particle_system->getSPHParticles();
+		std::vector<float3> cpu_sph_data;
+		size_t fluid_n = fluid_particles->m_size;
+		
+		cpu_sph_data.resize(fluid_n);
+		
+		cudaMemcpy(
+		(void*)cpu_sph_data.data(),
+			(void*)fluid_particles->m_device_data.m_d_positions,
+			fluid_n * sizeof(float3),
+			cudaMemcpyDeviceToHost
+			);
+
+		for (size_t i = 0; i < fluid_n; ++i)
+		{
+			int p_idx = p->addParticle();
+
+			float* pos = p->dataWrite<float>(positionAttr, p_idx);
+			float* color = p->dataWrite<float>(colorAttr, p_idx);
+			float* scale = p->dataWrite<float>(pScaleAttr, p_idx);
+			float* label = p->dataWrite<float>(labelAttr, p_idx);
+
+			pos[0] = cpu_sph_data[i].x;
+			pos[1] = cpu_sph_data[i].y;
+			pos[2] = cpu_sph_data[i].z;
+
+			//color
+			color[0] = fluid_particles->m_color.x;
+			color[1] = fluid_particles->m_color.y;
+			color[2] = fluid_particles->m_color.z;
+
+			*scale = m_particle_system->getParticleRadius();
+			//*scale = 1.f;
+			*label = ParticleLabel::LABEL_FLUID;
+		}
+
+		Partio::write(path.c_str(), *p);
+
+		p->release();
+		cpu_sph_data.clear();
+		//cpu_dem_data.clear();
+
+		std::cout << "Bgeo file exported: " << path << std::endl;
+	}
+	{
+		std::string path = "./results/frame_" + std::to_string(m_record_clip_index) + "_rigid.bgeo"; // + frame count
+
+		Partio::ParticlesDataMutable* p = Partio::create();
+		Partio::ParticleAttribute positionAttr = p->addAttribute("position", Partio::VECTOR, 3);
+		Partio::ParticleAttribute colorAttr = p->addAttribute("Cd", Partio::FLOAT, 3);
+		Partio::ParticleAttribute pScaleAttr = p->addAttribute("pscale", Partio::FLOAT, 1);
+		Partio::ParticleAttribute labelAttr = p->addAttribute("label", Partio::INT, 1);
+
+		ParticleSet* solid_particles = m_particle_system->getDEMParticles();
+
+		std::vector<float3> cpu_dem_data;
+
+		size_t solid_n = solid_particles->m_size;
+
+		cpu_dem_data.resize(solid_n);
+
+		cudaMemcpy(
+		(void*)cpu_dem_data.data(),
+			(void*)solid_particles->m_device_data.m_d_positions,
+			solid_n * sizeof(float3),
+			cudaMemcpyDeviceToHost
+			);
+
+		for (size_t i = 0; i < solid_n; ++i)
+		{
+			int p_idx = p->addParticle();
+
+			float* pos = p->dataWrite<float>(positionAttr, p_idx);
+			float* color = p->dataWrite<float>(colorAttr, p_idx);
+			float* scale = p->dataWrite<float>(pScaleAttr, p_idx);
+			float* label = p->dataWrite<float>(labelAttr, p_idx);
+
+			pos[0] = cpu_dem_data[i].x;
+			pos[1] = cpu_dem_data[i].y;
+			pos[2] = cpu_dem_data[i].z;
+
+			//color
+			color[0] = solid_particles->m_color.x;
+			color[1] = solid_particles->m_color.y;
+			color[2] = solid_particles->m_color.z;
+
+			*scale = m_particle_system->getParticleRadius();
+			//*scale = 1.f;
+			*label = ParticleLabel::LABEL_RIGID;
+		}
+
+		Partio::write(path.c_str(), *p);
+
+		p->release();
+		cpu_dem_data.clear();
+
+		std::cout << "Bgeo file exported: " << path << std::endl;
 	}
 
-	Partio::write(path.c_str(), *p);
-
-	p->release();
-	cpu_sph_data.clear();
-	cpu_dem_data.clear();
-
-	std::cout << "Bgeo file exported: " << path << std::endl;
+	// increment clip index
+	m_record_clip_index++;
 }
 
 void GLFWApp::SignalFail()
@@ -404,7 +469,19 @@ void Key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 			renderer->SwtichRenderFluid();
 			break;
 		}
+		case GLFW_KEY_R:
+		{
+			instance->m_b_record = !instance->m_b_record;
+			if(instance->m_b_record)
+				std::cout << "Record start at frame: " + std::to_string(instance->m_frame_count) << std::endl;
+			else
+				std:cout << "Record end at frame: " + std::to_string(instance->m_frame_count) << std::endl;
 
+			// rest clip index;
+			instance->m_record_clip_index = 0;
+
+			break;
+		}
 		case GLFW_KEY_M:
 		{
 			instance->ExportBgeoFile();
@@ -528,6 +605,9 @@ void GLFWApp::Update()
 
 	// GUI update
 	m_gui_manager->Update();
+
+	if(m_b_record)
+		ExportBgeoFile();
 
 	if(!m_simulator->isPause())
 		m_frame_count++;

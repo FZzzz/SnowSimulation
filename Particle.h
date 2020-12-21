@@ -91,6 +91,8 @@ public:
 
 	std::vector<float>		m_temperature;
 
+	glm::vec3				m_color;
+	
 	uint m_maximum_connection;
 
 	ParticleDeviceData m_device_data;

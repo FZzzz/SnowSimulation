@@ -333,7 +333,7 @@ void Renderer::RenderScene()
 #endif
 		// set point color
 		if (!m_b_use_temperature_shader)
-			shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 1.f));
+			shader->SetUniformVec3("point_color", particles->m_color);// glm::vec3(0.7f, 0.7f, 1.f));
 
 		glBindVertexArray(m_particle_system->getSPH_VAO());
 		glDrawArrays(GL_POINTS, 0, m_particle_system->getSPHParticles()->m_size);
@@ -349,7 +349,7 @@ void Renderer::RenderScene()
 #endif
 		// set point color
 		if (!m_b_use_temperature_shader)
-			shader->SetUniformVec3("point_color", glm::vec3(0.75f, 0.75f, 0.75f));
+			shader->SetUniformVec3("point_color", dem_particles->m_color); //glm::vec3(0.75f, 0.75f, 0.75f));
 
 		// if we are rendering the fluid, render to scene fbo
 		if (m_b_render_fluid)
@@ -388,7 +388,7 @@ void Renderer::RenderScene()
 		shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
 		shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
 		shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
-		point_shader->SetUniformVec3("point_color", glm::vec3(1.f, 1.f, 1.f));
+		point_shader->SetUniformVec3("point_color", boundary_particles->m_color); //glm::vec3(1.f, 1.f, 1.f));
 
 		glBindVertexArray(m_particle_system->getBoundaryVAO());
 		glDrawArrays(GL_POINTS, 0, m_particle_system->getBoundaryParticles()->m_size);
@@ -444,7 +444,7 @@ void Renderer::RenderSceneDepth()
 #endif
 		// set point color
 		if (!m_b_use_temperature_shader)
-			shader->SetUniformVec3("point_color", glm::vec3(0.75f, 0.75f, 0.75f));
+			shader->SetUniformVec3("point_color", dem_particles->m_color); // glm::vec3(0.75f, 0.75f, 0.75f));
 
 
 		// render
@@ -503,7 +503,7 @@ void Renderer::RenderFluidDepth()
 	shader->SetUniformVec3("light_pos", m_mainCamera->m_position);
 	shader->SetUniformVec3("camera_pos", m_mainCamera->m_position);
 	shader->SetUniformMat4("view", m_mainCamera->m_lookAt);
-	shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 1.f));
+	//shader->SetUniformVec3("point_color", glm::vec3(0.7f, 0.7f, 1.f));
 	shader->SetUniformMat4("model_view", model_view);
 	shader->SetUniformMat4("projection", m_mainCamera->m_projection);
 	shader->SetUniformFloat("sphere_radius", m_particle_system->getParticleRadius());

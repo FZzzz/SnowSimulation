@@ -51,8 +51,12 @@ public:
 	float m_mouse_last_x;
 	float m_mouse_last_y;
 	bool m_mouse_pressed;
+	bool m_b_record;
 
 	unsigned int m_frame_count;
+	unsigned int m_record_clip_index;
+
+	
 
 private:
 	
