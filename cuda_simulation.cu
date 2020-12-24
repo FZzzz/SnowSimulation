@@ -3981,115 +3981,6 @@ void print_particle_info(ParticleDeviceData data, uint index, const char* str)
 	);
 }
 
-__global__
-void melting(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_particles, uint frame_count)
-{
-	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
-
-	if (index >= num_particles)
-		return;
-
-	// melt -> put information to sph's tail
-	if (dem_data.m_d_T[index] > params.freezing_point && dem_data.m_d_contrib[index] >= 0.99f)
-	{
-		uint target_index;
-		target_index = atomicAdd(sph_data.m_d_new_end, 1u);
-		
-		dem_data.m_d_contrib[index] = 0;
-
-		//printf("(%u) DEM %u@%u \tto\t %u\n", frame_count ,dem_data.m_d_trackId[index], index, target_index);
-		//print_particle_info(dem_data, index, "DEM(Before)");
-		//print_particle_info(sph_data, target_index, "SPH");
-		copy_particle_info(dem_data, sph_data, index, target_index);
-		//print_particle_info(dem_data, index, "DEM(After)");
-		//print_particle_info(sph_data, target_index, "SPH");
-
-		dem_data.m_d_predicate[index] = 0; 
-		dem_data.m_d_trackId[index] = 0; 	//set track id to 0 => not using
-		sph_data.m_d_predicate[target_index] = 1;
-	}
-}
-
-__global__
-void freezing(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_particles, uint frame_count)
-{
-	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
-
-	if (index >= num_particles)
-		return;
-	
-	// freeze -> put this particle's information to dem's tail
-	if (sph_data.m_d_T[index] <= params.freezing_point && sph_data.m_d_contrib[index] >= 0.99f)
-	{
-		uint target_index;
-		target_index = atomicAdd(dem_data.m_d_new_end, 1u);
-		//printf("target_index: %u\n", target_index);
-		sph_data.m_d_contrib[index] = 0;
-
-		//printf("(%u) SPH %u@%u \tto\t %u\n", frame_count, sph_data.m_d_trackId[index], index, target_index);
-
-		copy_particle_info(sph_data, dem_data, index, target_index);
-
-		sph_data.m_d_predicate[index] = 0;
-		sph_data.m_d_trackId[index] = 0;
-
-		dem_data.m_d_predicate[target_index] = 1;
-		// reset refreezing data on dem particles
-		for (uint i = 0; i < params.maximum_connection; ++i)
-		{
-			const uint record_target_index = target_index * params.maximum_connection + i;
-			dem_data.m_d_connect_record[record_target_index] = UINT_MAX;
-			dem_data.m_d_connect_length[record_target_index] = 0.f;
-		}
-		dem_data.m_d_iter_end[target_index] = params.maximum_connection * target_index;
-	}
-}
-
-
-__global__
-void copy_to_target(ParticleDeviceData src, ParticleDeviceData dst, uint num_particles)
-{
-	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
-
-	if (index >= num_particles)
-		return;
-
-	copy_particle_info(src, dst, index, index);
-}
-
-__global__
-void scatter(ParticleDeviceData target_data, ParticleDeviceData buffer, uint num_particles)
-{
-	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
-
-	if (index >= num_particles)
-		return;
-
-	if (target_data.m_d_predicate[index] == 1)
-	{
-		uint target_index = target_data.m_d_scan_index[index];
-		if (target_index >= num_particles)
-			printf("Target out of bound: %u\n", target_index);
-		copy_particle_info(buffer, target_data, index, target_index);
-		target_data.m_d_new_index[index] = target_index;
-	}
-	else
-		target_data.m_d_new_index[index] = UINT_MAX;
-}
-
-__global__
-void clean_tail(ParticleDeviceData data, uint num_particles)
-{
-	// offset to new end
-	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x + (*data.m_d_new_end);
-
-	if (index >= num_particles)
-		return;
-
-	clean_particle_info(data, index);
-
-}
-
 __device__
 void xor_swap(uint* a, uint* b)
 {
@@ -4332,14 +4223,14 @@ void connect_and_record(ParticleSet* dem_particles, CellData dem_cell_data, bool
 
 
 template <typename T>
-void print_vec(std::vector<T> vec0, std::vector<T> vec1)
+void print_vec(std::vector<T> vec0, std::vector<T> vec1, std::vector<T> vec2)
 {
 	for (size_t i=0;i<vec0.size();++i)
-		std::cout << vec0[i] << " " << vec1[i] << "\t";
+		std::cout << vec0[i] << " " << vec1[i] << " " << vec2[i] << "\t";
 	std::cout << "\n";
 }
 
-void verification(ParticleSet* sph_particles, ParticleSet* dem_particles)
+void verification(ParticleSet* sph_particles, ParticleSet* dem_particles, bool& result)
 {
 	if (sph_particles->m_full_size != dem_particles->m_full_size)
 		return;
@@ -4354,6 +4245,8 @@ void verification(ParticleSet* sph_particles, ParticleSet* dem_particles)
 	std::vector<uint> sph_predicate_vec(n, 0u);
 	std::vector<uint> dem_predicate_vec(n, 0u);
 
+	std::vector<uint> sph_scan_vec(n, 0u);
+	std::vector<uint> dem_scan_vec(n, 0u);
 
 	// copy to host vector
 	cudaMemcpy(sph_id_vec.data(), sph_particles->m_device_data.m_d_trackId, n * sizeof(uint), cudaMemcpyDeviceToHost);
@@ -4361,6 +4254,9 @@ void verification(ParticleSet* sph_particles, ParticleSet* dem_particles)
 
 	cudaMemcpy(sph_predicate_vec.data(), sph_particles->m_device_data.m_d_predicate, n * sizeof(uint), cudaMemcpyDeviceToHost);
 	cudaMemcpy(dem_predicate_vec.data(), dem_particles->m_device_data.m_d_predicate, n * sizeof(uint), cudaMemcpyDeviceToHost);
+
+	cudaMemcpy(sph_scan_vec.data(), sph_particles->m_device_data.m_d_scan_index, n * sizeof(uint), cudaMemcpyDeviceToHost);
+	cudaMemcpy(dem_scan_vec.data(), dem_particles->m_device_data.m_d_scan_index, n * sizeof(uint), cudaMemcpyDeviceToHost);
 
 	//thrust::device_ptr<uint> sph_id_ptr = thrust::device_pointer_cast(sph_particles->m_device_data.m_d_trackId);
 	//thrust::device_ptr<uint> dem_id_ptr = thrust::device_pointer_cast(dem_particles->m_device_data.m_d_trackId);
@@ -4383,40 +4279,159 @@ void verification(ParticleSet* sph_particles, ParticleSet* dem_particles)
 				ans_count++, tmp++;
 		}
 		if (tmp > 1)
-			printf("\nExceed at %u", i);
+			printf("\nExceed at %u ", i);
 	}
 
 	if (ans_count == n)
+	{
 		printf("Verification success\n");
+		printf("SPH\n");
+		print_vec(sph_id_vec, sph_predicate_vec, sph_scan_vec);
+		printf("DEM\n");
+		print_vec(dem_id_vec, dem_predicate_vec, dem_scan_vec);
+		result = true;
+	}		
 	else if (ans_count > n)
 	{
 		printf("Verification failed (exceed) n=%u, ans_count=%u\n", n, ans_count);
-		printf("SPH ");
-		print_vec(sph_id_vec, sph_predicate_vec);
-		printf("DEM ");
-		print_vec(dem_id_vec, dem_predicate_vec);
+		printf("SPH\n");
+		print_vec(sph_id_vec, sph_predicate_vec, sph_scan_vec);
+		printf("DEM\n");
+		print_vec(dem_id_vec, dem_predicate_vec, dem_scan_vec);
+		result = false;
 	}
 	else if (ans_count < n)
 	{
 		printf("Verification failed (less) n=%u, ans_count=%u\n", n, ans_count);
 		printf("SPH\n");
-		print_vec(sph_id_vec, sph_predicate_vec);
+		print_vec(sph_id_vec, sph_predicate_vec, sph_scan_vec);
 		printf("DEM\n");
-		print_vec(dem_id_vec, dem_predicate_vec);
+		print_vec(dem_id_vec, dem_predicate_vec, dem_scan_vec);
+		result = false;
 	}
 
 
 }
 
 
+__global__
+void melting(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_particles, uint frame_count)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= num_particles)
+		return;
+
+	// melt -> put information to sph's tail
+	if (dem_data.m_d_T[index] > params.freezing_point && dem_data.m_d_contrib[index] >= 0.99f)
+	{
+		uint target_index;
+		target_index = atomicAdd(sph_data.m_d_new_end, 1u);
+
+		dem_data.m_d_contrib[index] = 0;
+
+		//printf("(%u) DEM %u@%u \tto\t %u\n", frame_count ,dem_data.m_d_trackId[index], index, target_index);
+		//print_particle_info(dem_data, index, "DEM(Before)");
+		//print_particle_info(sph_data, target_index, "SPH");
+		copy_particle_info(dem_data, sph_data, index, target_index);
+		//print_particle_info(dem_data, index, "DEM(After)");
+		//print_particle_info(sph_data, target_index, "SPH");
+
+		dem_data.m_d_predicate[index] = 0;
+		dem_data.m_d_trackId[index] = 0; 	//set track id to 0 => not using
+		sph_data.m_d_predicate[target_index] = 1;
+	}
+}
+
+__global__
+void freezing(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num_particles, uint frame_count)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= num_particles)
+		return;
+
+	// freeze -> put this particle's information to dem's tail
+	if (sph_data.m_d_T[index] <= params.freezing_point && sph_data.m_d_contrib[index] >= 0.99f)
+	{
+		uint target_index;
+		target_index = atomicAdd(dem_data.m_d_new_end, 1u);
+		//printf("target_index: %u\n", target_index);
+		sph_data.m_d_contrib[index] = 0;
+
+		//printf("(%u) SPH %u@%u \tto\t %u\n", frame_count, sph_data.m_d_trackId[index], index, target_index);
+
+		copy_particle_info(sph_data, dem_data, index, target_index);
+
+		sph_data.m_d_predicate[index] = 0;
+		sph_data.m_d_trackId[index] = 0;
+
+		dem_data.m_d_predicate[target_index] = 1;
+		// reset refreezing data on dem particles
+		for (uint i = 0; i < params.maximum_connection; ++i)
+		{
+			const uint record_target_index = target_index * params.maximum_connection + i;
+			dem_data.m_d_connect_record[record_target_index] = UINT_MAX;
+			dem_data.m_d_connect_length[record_target_index] = 0.f;
+		}
+		dem_data.m_d_iter_end[target_index] = params.maximum_connection * target_index;
+	}
+}
+
+__global__
+void copy_to_target(ParticleDeviceData src, ParticleDeviceData dst, uint num_particles)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= num_particles)
+		return;
+
+	copy_particle_info(src, dst, index, index);
+}
+
+__global__
+void scatter(ParticleDeviceData target_data, ParticleDeviceData buffer, uint num_particles)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= num_particles)
+		return;
+
+	if (target_data.m_d_predicate[index] == 1)
+	{
+		uint target_index = target_data.m_d_scan_index[index];
+		if (target_index >= num_particles)
+			printf("Target out of bound: %u\n", target_index);
+		copy_particle_info(buffer, target_data, index, target_index);
+		target_data.m_d_new_index[index] = target_index;
+	}
+	else
+		target_data.m_d_new_index[index] = UINT_MAX;
+}
+
+__global__
+void clean_tail(ParticleDeviceData data, uint tail_end)
+{
+	// offset to new end
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x + (*data.m_d_new_end);
+
+	if (index >= tail_end)
+		return;
+
+	clean_particle_info(data, index);
+
+}
+
 void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, ParticleDeviceData buffer)
 {
 	static uint count=0, sph_size=0, dem_size=0;
+	static bool verification_result = true;
+	static bool debug_flag = false;
 	
 	uint num_threads, num_blocks, full_num_threads, full_num_blocks;
 	uint sph_new_size, dem_new_size;
 	uint full_size = sph_particles->m_full_size;
-
+	
 	thrust::device_ptr<uint> sph_predicate_ptr = thrust::device_pointer_cast(sph_particles->m_device_data.m_d_predicate);
 	thrust::device_ptr<uint> dem_predicate_ptr = thrust::device_pointer_cast(dem_particles->m_device_data.m_d_predicate);
 
@@ -4428,6 +4443,11 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 
 	thrust::exclusive_scan(sph_predicate_ptr, sph_predicate_ptr + full_size, sph_scan_ptr, 0u);
 	thrust::exclusive_scan(dem_predicate_ptr, dem_predicate_ptr + full_size, dem_scan_ptr, 0u);
+
+	/*
+	if (count == 723)//dem_size != dem_particles->m_size)// && !verification_result)
+		printf("Before verification \n"),  verification(sph_particles, dem_particles, verification_result);
+	*/
 
 	// shuffle record data
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
@@ -4472,11 +4492,11 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 	
 	uint sph_tail_size = full_size - sph_new_size, dem_tail_size = full_size - dem_new_size;
 	compute_grid_size(sph_tail_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	clean_tail <<<num_blocks, num_threads>>> (sph_particles->m_device_data, sph_tail_size);
+	clean_tail <<<num_blocks, num_threads>>> (sph_particles->m_device_data, full_size);
 	getLastCudaError("Kernel execution failed: clean_tail ");
 
 	compute_grid_size(dem_tail_size, MAX_THREAD_NUM, num_blocks, num_threads);
-	clean_tail <<<num_blocks, num_threads>>> (dem_particles->m_device_data, dem_tail_size);
+	clean_tail <<<num_blocks, num_threads>>> (dem_particles->m_device_data, full_size);
 	getLastCudaError("Kernel execution failed: clean_tail ");
 	cudaDeviceSynchronize();
 
@@ -4487,13 +4507,15 @@ void compact_and_clean(ParticleSet* sph_particles, ParticleSet* dem_particles, P
 		num_blocks, num_threads);
 	update_record_index<<<num_blocks, num_threads>>>(dem_particles->m_device_data, record_size);
 	getLastCudaError("Kernel execution failed: update_record_index");
+	
 	/*
 	if (sph_size != sph_particles->m_size)
 		printf("(%u)New SPH size: %u\n", count, sph_particles->m_size), sph_size = sph_particles->m_size;
 	if (dem_size != dem_particles->m_size)
-		printf("(%u)New DEM size: %u\nAfter verification: ", count, dem_particles->m_size), dem_size = dem_particles->m_size, count++, verification(sph_particles, dem_particles), debug_flag=true;
-	*/
+		printf("(%u)New DEM size: %u, tail_size = %u \nAfter verification: ", count, dem_particles->m_size, dem_tail_size), dem_size = dem_particles->m_size, verification(sph_particles, dem_particles, verification_result), debug_flag = true;
 	
+	count++;
+	*/
 }
 
 void phase_change(
