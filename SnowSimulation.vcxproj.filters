@@ -263,6 +263,9 @@
     <ClInclude Include="RenderTargetTexture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SceneParams.h">
+      <Filter>Header Files\Engine\Physics</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="cuda_simulation.cu">

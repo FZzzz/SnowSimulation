@@ -4,6 +4,7 @@
 #include <cuda_runtime.h>
 #include "Particle.h"
 #include "SimParams.h"
+#include "SceneParams.h"
 #include "NeighborSearch.h"
 //#include <helper_math.h>
 
@@ -58,6 +59,7 @@ void snow_simulation(
     CellData     sph_cell_data,
     CellData     dem_cell_data,
     CellData     b_cell_data,
+    SceneParams&  scene_params,
     float        dt,
     int          iterations,
     bool         sph_dem_correction,

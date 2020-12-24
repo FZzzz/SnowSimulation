@@ -4019,7 +4019,7 @@ void freezing(ParticleDeviceData sph_data, ParticleDeviceData dem_data, uint num
 		return;
 	
 	// freeze -> put this particle's information to dem's tail
-	if (sph_data.m_d_T[index] <= params.freezing_point)// && sph_data.m_d_contrib[index] >= 0.99f)
+	if (sph_data.m_d_T[index] <= params.freezing_point && sph_data.m_d_contrib[index] >= 0.99f)
 	{
 		uint target_index;
 		target_index = atomicAdd(dem_data.m_d_new_end, 1u);
@@ -4511,9 +4511,8 @@ void phase_change(
 		return;
 	}
 
-	//uint full_size = sph_particles->m_full_size;
 	uint num_threads, num_blocks;
-	//predicate_and_fill << <num_blocks, num_threads >> > (sph_particles->m_device_data, dem_particles->m_device_data,  full_size);
+	
 	if (simulate_freezing)
 	{
 		compute_grid_size(sph_particles->m_size, MAX_THREAD_NUM, num_blocks, num_threads);
@@ -4648,6 +4647,7 @@ void snow_simulation(
 	CellData sph_cell_data, 
 	CellData dem_cell_data, 
 	CellData b_cell_data, 
+	SceneParams&  scene_params,
 	float dt,
 	int iterations,
 	bool correct_dem,
@@ -4734,9 +4734,10 @@ void snow_simulation(
 	if (use_interlink && dynamic_max_connections)
 		adjust_connections(dem_particles);
 
-
-	integrate_pbd(sph_particles, dt, sph_particles->m_size, cd_on);
-	integrate_pbd(dem_particles, dt, dem_particles->m_size, cd_on);
+	if (scene_params.current_time >= scene_params.fluid_start_time)
+		integrate_pbd(sph_particles, dt, sph_particles->m_size, cd_on);
+	if (scene_params.current_time >= scene_params.solid_start_time)
+		integrate_pbd(dem_particles, dt, dem_particles->m_size, cd_on);
 
 
 	for (int i = 0; i < iterations; ++i)
@@ -4892,5 +4893,5 @@ void snow_simulation(
 		dem_viscosity
 	);
 
-
+	scene_params.current_time += dt;
 }

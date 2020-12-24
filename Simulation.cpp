@@ -19,9 +19,9 @@ Simulation::Simulation()
 	m_iterations(1),
 	m_clip_length(1000)
 {
-	
-
+	m_scene_params.current_time = 0.f;
 }
+
 Simulation::Simulation(SimWorldDesc desc)
 	: m_solver(nullptr), m_particle_system(nullptr), m_neighbor_searcher(nullptr), 
 	m_initialized(false), m_world_desc(desc), m_pause(false)
@@ -37,14 +37,33 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_particle_system = particle_system;
 	
 	uint3 grid_size = make_uint3(64, 64, 64);
-	glm::vec3 fluid_half_extends = glm::vec3(0.25f, 0.25f, 0.999f);
-	//glm::vec3 fluid_half_extends = glm::vec3(0.98f, 0.25f, 0.25f);
+
+	/*
+	// snow melt
+	glm::vec3 fluid_half_extends = glm::vec3(1.f, 0.0675f, 1.f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
-	glm::vec3 fluid_origin = glm::vec3(-0.75f, 0.5f, 0.0f);
-	glm::vec3 snow_origin = glm::vec3(0.251f, 0.99f, 0.0f);
+	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.0775f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.251f, 0.75f, 0.0f);
 	
-	const float sph_temperature = 5.f;
+	const float sph_temperature = 50.f;
 	const float dem_temperature = -5.f;
+	
+	m_scene_params.fluid_start_time = 0.f;
+	m_scene_params.solid_start_time = 0.5f;
+	*/
+	
+	// water drop
+	glm::vec3 fluid_half_extends = glm::vec3(0.05f, 1.5f, 0.05f);
+	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
+	glm::vec3 fluid_origin = glm::vec3(0.0f, 2.5f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.f, 0.26f, 0.0f);
+
+	const float sph_temperature = 5.f;
+	const float dem_temperature = -50.f;
+
+	m_scene_params.fluid_start_time = 0.0f;
+	m_scene_params.solid_start_time = 0.0f;
+
 
 	m_particle_system->setHottestTemperature(sph_temperature + 0.1f * glm::abs(sph_temperature));
 	m_particle_system->setCoolestTemperature(dem_temperature - 0.1f * glm::abs(dem_temperature));
@@ -52,6 +71,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_neighbor_searcher = std::make_shared<NeighborSearch>(m_particle_system, grid_size);
 	m_solver = std::make_shared<ConstraintSolver>(mode);
 
+	/*Set up parameters*/
 	SetupSimParams();
 	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, true);
 	GenerateParticleCube(snow_half_extends, snow_origin, 1, true);
@@ -155,13 +175,12 @@ bool Simulation::StepCUDA(float dt)
 	bool compute_temperature = true;
 	bool change_phase = true;
 	bool simulate_freezing = true;
-	bool simulate_melting = true;
-	//bool compute_wetness = false;
+	bool simulate_melting = false;
 	bool dem_friction = true;
 	bool dem_viscosity = true;
 
-	bool use_interlink = true;
-	bool dynamic_connections = true;
+	bool use_interlink = false;
+	bool dynamic_connections = false;
 
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 
@@ -205,6 +224,7 @@ bool Simulation::StepCUDA(float dt)
 		m_neighbor_searcher->m_d_sph_cell_data,
 		m_neighbor_searcher->m_d_dem_cell_data,
 		m_neighbor_searcher->m_d_boundary_cell_data,
+		m_scene_params,
 		dt,
 		m_iterations,
 		sph_dem_correction,
@@ -319,7 +339,7 @@ void Simulation::setClipLength(int length)
 void Simulation::SetupSimParams()
 {
 	//const size_t n_particles = 1000;
-	const float particle_mass = 0.0125f;
+	const float particle_mass = 0.025f;
 	const float n_kernel_particles = 20.f;	
 	const float dem_sph_ratio = 1.0f;
 	// water density = 1000 kg/m^3
@@ -347,8 +367,8 @@ void Simulation::SetupSimParams()
 
 	m_sim_params->gravity = make_float3(0.f, -9.8f, 0.f);
 	m_sim_params->global_damping = 1.0;
-	m_sim_params->maximum_speed = 10.f;
-	m_sim_params->minimum_speed = 0.00f;// 01f * particle_radius * m_dt * m_dt;
+	m_sim_params->maximum_speed = 2.5f;
+	m_sim_params->minimum_speed = 0.0f;// 01f * particle_radius * m_dt * m_dt;
 
 	m_sim_params->particle_radius = particle_radius;
 	m_sim_params->effective_radius = effective_radius;
@@ -360,7 +380,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->num_cells = m_neighbor_searcher->m_num_grid_cells;
 	m_sim_params->world_origin = make_float3(0, 0, 0);
 	m_sim_params->cell_size = make_float3(m_sim_params->effective_radius);
-	m_sim_params->boundary_damping = 0.99f;
+	m_sim_params->boundary_damping = 0.15f;
 	
 	//coupling coefficients
 	//m_sim_params->sph_dem_corr = 0.05f;
@@ -381,7 +401,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->freezing_point = 0.f;
 	m_sim_params->T_homogeneous = -5.0f;
 
-	m_sim_params->blending_speed = 0.001f;
+	m_sim_params->blending_speed = 0.1f;
 
 	// set up sph kernel constants
 	m_sim_params->poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));
@@ -392,7 +412,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->scorr_divisor = SPHKernel::Poly6_W(0.3f * effective_radius, effective_radius);
 
 	m_sim_params->maximum_connection = m_particle_system->getMaximumConnection();
-	m_sim_params->k_refreezing = 0.01f; // PBD based stiffness (better with XPBD (haven't impelment yet))
+	m_sim_params->k_refreezing = 0.1f; // PBD based stiffness (better with XPBD (haven't impelment yet))
 	m_sim_params->break_threshold = 1.1f;
 	m_particle_system->setParticleRadius(particle_radius);
 

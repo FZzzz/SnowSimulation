@@ -11,6 +11,7 @@
 #include "ParticleSystem.h"
 #include "NeighborSearch.h"
 #include "SimParams.h"
+#include "SceneParams.h"
 
 struct SimWorldDesc
 {
@@ -105,6 +106,8 @@ private:
 	/*Simulation control parameters*/
 	uint32_t m_iterations;
 	int m_clip_length; // clip length of how many frames at the each run
+	
+	SceneParams m_scene_params;
 	
 	float m_dt;
 

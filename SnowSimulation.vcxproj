@@ -214,6 +214,7 @@
     <ClInclude Include="RenderTargetTexture.h" />
     <ClInclude Include="ResourceManager.h" />
     <ClInclude Include="Rigidbody.h" />
+    <ClInclude Include="SceneParams.h" />
     <ClInclude Include="Shader.h" />
     <ClInclude Include="SimParams.h" />
     <ClInclude Include="Simulation.h" />
