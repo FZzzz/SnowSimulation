@@ -949,11 +949,11 @@ float3 pbf_correction_boundary(
 
 			float3 gradient = sph_kernel_spiky_gradient(vec, dist, params.effective_radius);
 
-			float scorr = -0.1f;
-			float x = sph_kernel_poly6(dist, params.effective_radius) /
-				sph_kernel_poly6(0.3f * params.effective_radius, params.effective_radius);
+			//float scorr;// = -0.1f;
+			float x = sph_kernel_poly6(dist, params.effective_radius) / params.scorr_divisor;
+				//sph_kernel_poly6(0.3f * params.effective_radius, params.effective_radius);
 			x = pow(x, 4);
-			scorr = scorr * x * dt * dt;
+			float scorr = -params.scorr_coeff * x * dt * dt;
 
 			float3 res = (lambda_i + lambda_j + scorr) * gradient;
 
@@ -1002,12 +1002,11 @@ float3 pbf_correction_coupling(
 				if (dist <= 2.f * params.particle_radius)
 				{
 					float3 gradient = sph_kernel_poly6_gradient(vec, dist, params.effective_radius);
-
-					float scorr = -0.1f;
-					float x = sph_kernel_poly6(dist, params.effective_radius) /
-						sph_kernel_poly6(0.3f * params.effective_radius, params.effective_radius);
+					//float scorr;// = -0.1f;
+					float x = sph_kernel_poly6(dist, params.effective_radius) / params.scorr_divisor;
+						//sph_kernel_poly6(0.3f * params.effective_radius, params.effective_radius);
 					x = pow(x, 4);
-					scorr = scorr * x * dt * dt;
+					float scorr = -params.scorr_coeff * scorr * x * dt * dt;
 
 					float3 res = (lambda_i + lambda_j + scorr) * gradient;
 
@@ -1345,7 +1344,15 @@ void apply_correction(
 	//predict_pos[index] = new_pos[index];
 	
 	uint original_index = cell_data.grid_index[index];
-		
+	
+	/*
+	if (original_index == 0 && data.m_d_trackId[original_index] == 161)
+		printf("TrackId(%u): %f, %f, %f rho:%f, corr: %f, %f, %f\n", data.m_d_trackId[original_index], 
+			data.m_d_predict_positions[original_index].x, data.m_d_predict_positions[original_index].y, data.m_d_predict_positions[original_index].z,
+			data.m_d_density[original_index], 
+			data.m_d_correction[original_index].x, data.m_d_correction[original_index].y, data.m_d_correction[original_index].z);
+	*/
+
 	data.m_d_new_positions[original_index] = cell_data.sorted_pos[index] + params.sor_coeff * data.m_d_correction[original_index];
 	/*
 	if (isnan(data.m_d_new_positions[original_index].x) || isnan(data.m_d_new_positions[original_index].y) || isnan(data.m_d_new_positions[original_index].z))
@@ -1804,6 +1811,10 @@ void compute_dem_distance_correction(
 	}
 
 	corr *= dem_data.m_d_contrib[original_index];
+
+	if (isnan(corr.x))
+		printf("1814 nan\n");
+
 	dem_data.m_d_correction[original_index] += corr;
 }
 
@@ -2023,6 +2034,11 @@ void compute_friction_correction(
 			}
 		}
 	}
+
+
+	if (isnan(corr.x))
+		printf("2038 nan\n");
+
 	correction[original_index] = corr;
 }
 
@@ -2068,6 +2084,10 @@ void compute_sph_dem_distance_correction(
 	}
 
 	corr *= (1.f - sph_data.m_d_contrib[original_index]);
+
+
+	if (isnan(corr.x))
+		printf("2088 nan\n");
 
 	sph_data.m_d_correction[original_index] += corr;
 }
@@ -2115,6 +2135,10 @@ void compute_dem_sph_distance_correction(
 
 	//corr_{new_dem} = (1-a) corr_{sph} + "a corr_{dem}"
 	corr *= dem_data.m_d_contrib[original_index];
+
+
+	if (isnan(corr.x))
+		printf("2136 nan\n");
 
 	dem_data.m_d_correction[original_index] += corr;
 }
@@ -2167,6 +2191,10 @@ void compute_sph_sph_distance_correction(
 		}
 	}
 	corr *= (1.f - contrib[original_index]);
+
+	if (isnan(corr.x))
+		printf("2194 nan\n");
+
 	correction[original_index] += corr;
 }
 
@@ -3129,6 +3157,11 @@ void compute_pbf_sph_correction(
 
 	corr = (1.f / params.rest_density) * corr;
 	corr *= sph_data.m_d_contrib[original_index];
+
+
+	if (isnan(corr.x))
+		printf("3161 nan\n");
+
 	sph_correction[original_index] += corr;
 }
 
@@ -3190,6 +3223,9 @@ void compute_pbf_new_dem_correction(
 		}
 	}
 
+	if (isnan(corr.x))
+		printf("3225 nan\n");
+
 	//dem-dem
 	for (int z = -1; z <= 1; z++)
 	{
@@ -3212,7 +3248,8 @@ void compute_pbf_new_dem_correction(
 		}
 	}
 
-
+	if (isnan(corr.x))
+		printf("3247 nan\n");
 
 	// dem-boundary
 	for (int z = -1; z <= 1; z++)
@@ -3235,8 +3272,16 @@ void compute_pbf_new_dem_correction(
 		}
 	}
 
+	if (isnan(corr.x))
+		printf("3270 nan\n");
+
 	corr = (1.f / params.rest_density) * corr;
 	corr *= (1.f - dem_data.m_d_contrib[original_index]);
+
+
+	if (isnan(corr.x))
+		printf("3274 nan\n");
+
 	dem_data.m_d_correction[original_index] += corr;
 }
 
@@ -3604,26 +3649,31 @@ void apply_XSPH_viscosity(
 	CellData dem_cell_data,
 	uint sph_num_particles,
 	uint dem_num_particles,
+	bool b_step_sph,
+	bool b_step_dem,
 	bool use_dem_viscosity=false
 )
 {
 	uint sph_num_threads, sph_num_blocks;
 	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, sph_num_blocks, sph_num_threads);
 
-	xsph_sph_viscosity <<<sph_num_blocks, sph_num_threads>>> (
-		sph_particles->m_device_data.m_d_velocity,
-		sph_particles->m_device_data.m_d_mass,
-		sph_particles->m_device_data.m_d_density,
-		dem_particles->m_device_data.m_d_velocity,
-		dem_particles->m_device_data.m_d_mass,
-		dem_particles->m_device_data.m_d_density,
-		sph_cell_data,
-		dem_cell_data,
-		sph_num_particles
-	);
-	getLastCudaError("Kernel execution failed : xsph_sph_viscosity");
-
-	if (use_dem_viscosity)
+	if (b_step_sph)
+	{
+		xsph_sph_viscosity << <sph_num_blocks, sph_num_threads >> > (
+			sph_particles->m_device_data.m_d_velocity,
+			sph_particles->m_device_data.m_d_mass,
+			sph_particles->m_device_data.m_d_density,
+			dem_particles->m_device_data.m_d_velocity,
+			dem_particles->m_device_data.m_d_mass,
+			dem_particles->m_device_data.m_d_density,
+			sph_cell_data,
+			dem_cell_data,
+			sph_num_particles
+			);
+		getLastCudaError("Kernel execution failed : xsph_sph_viscosity");
+	}
+	
+	if (use_dem_viscosity && b_step_dem)
 	{
 		uint dem_num_threads, dem_num_blocks;
 		compute_grid_size(dem_num_particles, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
@@ -4087,9 +4137,11 @@ void connect_and_record_cell(
 
 				uint connection_count = data.m_d_iter_end[index0] - (index0 * params.maximum_connection);
 				uint count_tolerance = (dynamic_max_connections)
-										? (data.m_d_T[index0] - params.freezing_point) / (params.T_homogeneous - params.freezing_point) * params.maximum_connection 
-										: index0 * params.maximum_connection;
+										? ((data.m_d_T[index0] - params.freezing_point) / (params.T_homogeneous - params.freezing_point)) * params.maximum_connection 
+										: params.maximum_connection;
 					
+				count_tolerance = min(count_tolerance,  params.maximum_connection);
+				//printf("Count tolerance: %u n_max: %u\n", count_tolerance, params.maximum_connection);
 
 				// fill in when they are close enough && if the iter_end doesn't exceed the maximum connection
 				if (dist < params.effective_radius
@@ -4551,24 +4603,90 @@ void phase_change(
 	frame_count++;
 }
 
-inline __device__
-float3 compute_interlink_correction(ParticleDeviceData& data, uint index0, uint index1, float connect_length)
+__noinline__  __device__
+void delete_record(ParticleDeviceData& data, uint index0, uint index1)
+{
+	uint start = index0 * params.maximum_connection;
+	uint end = (index0 + 1) * params.maximum_connection;
+
+	for (uint idx = start; idx < end; ++idx)
+	{
+		// search for index1 and delete the info
+		if (atomicCAS(&data.m_d_connect_record[idx], index1, UINT_MAX) == index1)
+		{
+			// clean length
+			atomicExch(&data.m_d_connect_length[idx], 0.f);
+			// shrink the opposite usage 
+			//atomicSub(&data.m_d_iter_end[index1], 1u);
+			break;
+		}
+	}
+
+	start = index1 * params.maximum_connection;
+	end = (index1 + 1) * params.maximum_connection;
+
+	for (uint idx = start; idx < end; ++idx)
+	{
+		// search for index1 and delete the info
+		if (atomicCAS(&data.m_d_connect_record[idx], index0 , UINT_MAX) == index0)
+		{
+			// clean length
+			atomicExch(&data.m_d_connect_length[idx], 0.f);
+			// shrink usage 
+			//atomicSub(&data.m_d_iter_end[index0], 1u);
+			break;
+		}
+	}
+}
+
+
+__noinline__ __device__
+float3 compute_interlink_correction(ParticleDeviceData& data, volatile uint index0, volatile uint index1, volatile float connect_length, volatile uint num_particles)
 {
 	float3 result = make_float3(0, 0, 0);
 	if (index0 == index1)
 	{
-		printf("Invalid computation at index: %u (compute_interlink_correction)\n", index0);
-		return result;
+		//printf("Invalid computation at index: %u (compute_interlink_correction)\n", index0);
+		return make_float3(0, 0, 0);
 	}
 	 
+	if (index0 >= num_particles)
+	{
+		//printf("Target index out of bound %u\n", index0);
+		return make_float3(0, 0, 0);
+	}
+
+	if (index1 >= num_particles)
+	{
+		//printf("Target index out of bound %u\n", index1);
+		return make_float3(0, 0, 0);
+	}
+
+	if (connect_length == 0.f)
+	{
+		//printf("Length error %u -> %u\n", index0, index1);
+		return make_float3(0, 0, 0);
+	}
+
+
 	const float3 pos0 = data.m_d_predict_positions[index0];
 	const float3 pos1 = data.m_d_predict_positions[index1];
 	const float3 v = pos0 - pos1;
 	float dist = length(v);
 
+	
 	if (dist > params.break_threshold * connect_length)
-		return result;
+	{
+		delete_record(data ,index0, index1);
+		return make_float3(0, 0, 0);
+	}
 
+	if (dist > params.effective_radius)
+	{
+		delete_record(data, index0, index1);
+		return make_float3(0, 0, 0);
+	}
+	
 	// always corrects (equality constraint)
 	const float w0 = data.m_d_massInv[index0];
 	const float w1 = data.m_d_massInv[index1];
@@ -4580,7 +4698,26 @@ float3 compute_interlink_correction(ParticleDeviceData& data, uint index0, uint 
 
 	result = params.k_refreezing * -w0 * (1.f / w_sum) * C * n;
 
+	if (length(result) > 1.f)
+	{
+		printf("Wrong correction\n");
+		return make_float3(0, 0, 0);
+	}
+
+	if (isnan(result.x))
+	{
+		printf("NaN index0:%u index1:%u w0:%f w1:%f pos0:(%f, %f, %f) pos1:(%f, %f, %f) trackId0:%u trackId1:%u\n", index0, index1, w0, w1, pos0.x, pos0.y, pos0.z, pos1.x, pos1.y, pos1.z, data.m_d_trackId[index0], data.m_d_trackId[index1]);
+		return make_float3(0, 0, 0);
+	}
+
+	if (isinf(result.x))
+	{
+		printf("Inf index0:%u index1:%u w0:%f w1:%f pos0:(%f, %f, %f) pos1:(%f, %f, %f) trackId0:%u trackId1:%u\n", index0, index1, w0, w1, pos0.x, pos0.y, pos0.z, pos1.x, pos1.y, pos1.z, data.m_d_trackId[index0], data.m_d_trackId[index1]);
+		return make_float3(0, 0, 0);
+	}
+
 	return result;
+	//return make_float3(0, 0, 0);
 }
 
 
@@ -4598,10 +4735,13 @@ void solve_snow_interlink_constraint_d(ParticleDeviceData data, uint num_particl
 	// traverse record to compute interlink correction
 	for (uint i = params.maximum_connection * index; i < params.maximum_connection * (index + 1); ++i)
 	{
-		if(data.m_d_connect_record[i] != UINT_MAX)
-			corr += compute_interlink_correction(data, index, data.m_d_connect_record[i], data.m_d_connect_length[i]);
+		uint index1 = data.m_d_connect_record[i];
+		if(index1 != UINT_MAX)
+			corr += compute_interlink_correction(data, index, index1, data.m_d_connect_length[i], num_particles);
 	}
-	
+
+	if (isnan(corr.x))
+		printf("4736 nan\n");
 	// write back this correction to data
 	data.m_d_correction[index] += corr;
 }
@@ -4614,18 +4754,23 @@ void adjust_connections_d(ParticleDeviceData data, uint num_particles)
 	if (index >= num_particles)
 		return;
 	
-	uint T = data.m_d_T[index];
+	float T = data.m_d_T[index];
 
 	uint count = 0;
-	uint current_max_connection = (uint)( ((T - params.freezing_point) / 
-											(params.T_homogeneous - params.freezing_point)) 
-											* params.maximum_connection);
+	uint current_max_connection = (T - params.freezing_point) 
+									/ (params.T_homogeneous - params.freezing_point)
+									* params.maximum_connection;
+
+	current_max_connection = min(current_max_connection, params.maximum_connection);
+
+	
 	// traverse whole record
 	for (uint i = params.maximum_connection * index; i < params.maximum_connection * (index + 1); ++i)
 	{
-		count = (data.m_d_connect_record[i] != UINT_MAX) ? count + 1: count; 
+		count = (atomicSub(&data.m_d_connect_record[i], 0u) != UINT_MAX) ? count + 1: count;
 		if (count > current_max_connection)
 		{
+			//printf("Deleting for %u T:%f current_max: %u\n", index, T, current_max_connection);
 			// delete record on this index
 			uint index1 = atomicExch(&data.m_d_connect_record[i], UINT_MAX);
 			data.m_d_connect_length[i] = 0.f;
@@ -4661,6 +4806,16 @@ void solve_snow_interlink_constraint(ParticleSet* dem_particles)
 	getLastCudaError("Kernel execution failed: solve_snow_interlink_constraint_d ");
 }
 
+__global__
+void check_temperature(ParticleDeviceData data, uint num_particles)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+	if (index >= num_particles)
+		return;
+
+	printf("%.1f (%u)\n", data.m_d_T[index], index);
+}
+
 void snow_simulation(
 	ParticleSet* sph_particles,
 	ParticleSet* dem_particles, 
@@ -4686,10 +4841,29 @@ void snow_simulation(
 	bool cd_on
 )
 {
+	bool b_step_sph = (scene_params.current_time >= scene_params.fluid_start_time);
+	bool b_step_dem = (scene_params.current_time >= scene_params.solid_start_time);
+
+	
 	uint sph_num_threads, sph_num_blocks;
 	compute_grid_size(sph_particles->m_size, MAX_THREAD_NUM, sph_num_blocks, sph_num_threads);
 	uint dem_num_threads, dem_num_blocks;
 	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
+
+	/*
+	static int frame_count = 0;
+
+	if (frame_count == 0)
+	{
+		printf("SPH\n");
+		//check_temperature<<<sph_num_blocks, sph_num_threads>>>(sph_particles->m_device_data, sph_particles->m_size);
+		cudaDeviceSynchronize();
+		printf("\nDEM");
+		check_temperature<<<dem_num_blocks, dem_num_threads>>>(dem_particles->m_device_data, dem_particles->m_size);
+		cudaDeviceSynchronize();
+	}
+	frame_count++;
+	*/
 
 	sort_and_reorder(
 		dem_particles->m_device_data.m_d_predict_positions,
@@ -4756,9 +4930,9 @@ void snow_simulation(
 	if (use_interlink && dynamic_max_connections)
 		adjust_connections(dem_particles);
 
-	if (scene_params.current_time >= scene_params.fluid_start_time)
+	if (b_step_sph)
 		integrate_pbd(sph_particles, dt, sph_particles->m_size, cd_on);
-	if (scene_params.current_time >= scene_params.solid_start_time)
+	if (b_step_dem)
 		integrate_pbd(dem_particles, dt, dem_particles->m_size, cd_on);
 
 
@@ -4832,78 +5006,91 @@ void snow_simulation(
 		if(use_interlink)
 			solve_snow_interlink_constraint(dem_particles);
 		
-		apply_correction << <sph_num_blocks, sph_num_threads >> > (
-			sph_particles->m_device_data,
-			sph_cell_data,
-			sph_particles->m_size
-		);
-		getLastCudaError("Kernel execution failed: apply_correction ");
-
-		apply_correction << <dem_num_blocks, dem_num_threads >> > (
-			dem_particles->m_device_data,
-			dem_cell_data,
-			dem_particles->m_size
+		if (b_step_sph)
+		{
+			apply_correction << <sph_num_blocks, sph_num_threads >> > (
+				sph_particles->m_device_data,
+				sph_cell_data,
+				sph_particles->m_size
+				);
+			getLastCudaError("Kernel execution failed: apply_correction ");
+		}
+		
+		if (b_step_dem)
+		{
+			apply_correction << <dem_num_blocks, dem_num_threads >> > (
+				dem_particles->m_device_data,
+				dem_cell_data,
+				dem_particles->m_size
+				);
+			getLastCudaError("Kernel execution failed: apply_correction ");
+		}
+		
+		if (dem_friction && b_step_dem)
+		{
+			sort_and_reorder(
+				dem_particles->m_device_data.m_d_predict_positions,
+				dem_cell_data,
+				dem_particles->m_size
 			);
-		getLastCudaError("Kernel execution failed: apply_correction ");
+
+			sort_and_reorder(
+				sph_particles->m_device_data.m_d_predict_positions,
+				sph_cell_data,
+				sph_particles->m_size
+			);
+
+			compute_friction_correction << <dem_num_blocks, dem_num_threads >> > (
+				dem_particles->m_device_data.m_d_correction,
+				dem_particles->m_device_data.m_d_new_positions,
+				dem_particles->m_device_data.m_d_positions,
+				dem_particles->m_device_data.m_d_massInv,
+				boundary_particles->m_device_data.m_d_massInv,
+				dem_cell_data,
+				b_cell_data,
+				dem_particles->m_size
+				);
+			getLastCudaError("Kernel execution failed: compute_friction_correction ");
+
+			apply_correction << <dem_num_blocks, dem_num_threads >> > (
+				dem_particles->m_device_data,
+				dem_cell_data,
+				dem_particles->m_size
+				);
+			getLastCudaError("Kernel execution failed: apply_correction ");
+		}
 
 	}
 
-	if (dem_friction)
-	{
-		sort_and_reorder(
-			dem_particles->m_device_data.m_d_predict_positions,
-			dem_cell_data,
-			dem_particles->m_size
-		);
-
-		sort_and_reorder(
-			sph_particles->m_device_data.m_d_predict_positions,
-			sph_cell_data,
-			sph_particles->m_size
-		);
-
-		compute_friction_correction << <dem_num_blocks, dem_num_threads >> > (
-			dem_particles->m_device_data.m_d_correction,
-			dem_particles->m_device_data.m_d_new_positions,
-			dem_particles->m_device_data.m_d_positions,
-			dem_particles->m_device_data.m_d_massInv,
-			boundary_particles->m_device_data.m_d_massInv,
-			dem_cell_data,
-			b_cell_data,
-			dem_particles->m_size
-			);
-		getLastCudaError("Kernel execution failed: compute_friction_correction ");
-
-		apply_correction << <dem_num_blocks, dem_num_threads >> > (
-			dem_particles->m_device_data,
-			dem_cell_data,
-			dem_particles->m_size
-			);
-		getLastCudaError("Kernel execution failed: apply_correction ");
-	}
 	/*
 	*/
-	// finialize corrections and compute velocity for next integration 
-	finalize_correction << <sph_num_blocks, sph_num_threads >> > (
-		sph_particles->m_device_data.m_d_positions,
-		sph_particles->m_device_data.m_d_new_positions,
-		sph_particles->m_device_data.m_d_predict_positions,
-		sph_particles->m_device_data.m_d_velocity,
-		sph_particles->m_size,
-		dt
-	);
-	getLastCudaError("Kernel execution failed: finalize_correction ");
-
-	finalize_correction << <dem_num_blocks, dem_num_threads >> > (
-		dem_particles->m_device_data.m_d_positions,
-		dem_particles->m_device_data.m_d_new_positions,
-		dem_particles->m_device_data.m_d_predict_positions,
-		dem_particles->m_device_data.m_d_velocity,
-		dem_particles->m_size,
-		dt
-		);
-	getLastCudaError("Kernel execution failed: finalize_correction ");
-
+	if (b_step_sph)
+	{
+		// finialize corrections and compute velocity for next integration 
+		finalize_correction << <sph_num_blocks, sph_num_threads >> > (
+			sph_particles->m_device_data.m_d_positions,
+			sph_particles->m_device_data.m_d_new_positions,
+			sph_particles->m_device_data.m_d_predict_positions,
+			sph_particles->m_device_data.m_d_velocity,
+			sph_particles->m_size,
+			dt
+			);
+		getLastCudaError("Kernel execution failed: finalize_correction ");
+	}
+	
+	if (b_step_dem)
+	{
+		finalize_correction << <dem_num_blocks, dem_num_threads >> > (
+			dem_particles->m_device_data.m_d_positions,
+			dem_particles->m_device_data.m_d_new_positions,
+			dem_particles->m_device_data.m_d_predict_positions,
+			dem_particles->m_device_data.m_d_velocity,
+			dem_particles->m_size,
+			dt
+			);
+		getLastCudaError("Kernel execution failed: finalize_correction ");
+	}
+	
 	
 	apply_XSPH_viscosity(
 		sph_particles, 
@@ -4912,6 +5099,8 @@ void snow_simulation(
 		dem_cell_data,
 		sph_particles->m_size,
 		dem_particles->m_size,
+		b_step_sph,
+		b_step_dem,
 		dem_viscosity
 	);
 

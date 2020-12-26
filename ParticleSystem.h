@@ -26,6 +26,8 @@ public:
 	ParticleSet* AllocateBoundaryParticles();
 
 	//void setParticles(std::vector<std::shared_ptr<Particle>> particles);
+	void setSPHInitialVelocity(glm::vec3 vel);
+	void setDEMInitialVelocity(glm::vec3 vel);
 	void setParticleRadius(float particle_radius);
 	void setHottestTemperature(float value) { m_hottest_temperature = value; };
 	void setCoolestTemperature(float value) { m_coolest_temperature = value; };
@@ -110,6 +112,9 @@ private:
 	
 	float m_hottest_temperature;
 	float m_coolest_temperature;
+
+	glm::vec3 m_sph_init_vel;
+	glm::vec3 m_dem_init_vel;
 
 	uint m_maximum_connection;
 

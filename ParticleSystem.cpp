@@ -130,6 +130,16 @@ ParticleSet* ParticleSystem::AllocateBoundaryParticles()
 	return m_boundary_particles;
 }
 
+void ParticleSystem::setSPHInitialVelocity(glm::vec3 vel)
+{
+	m_sph_particles->m_velocity.assign(m_sph_particles->m_size, vel);
+}
+
+void ParticleSystem::setDEMInitialVelocity(glm::vec3 vel)
+{
+	m_dem_particles->m_velocity.assign(m_dem_particles->m_size, vel);
+}
+
 void ParticleSystem::setParticleRadius(float point_radius)
 {
 	m_particle_radius = point_radius;

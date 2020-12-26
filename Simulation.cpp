@@ -39,31 +39,61 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	uint3 grid_size = make_uint3(64, 64, 64);
 
 	/*
-	// snow melt
-	glm::vec3 fluid_half_extends = glm::vec3(1.f, 0.0675f, 1.f);
+	// Debug
+	glm::vec3 fluid_half_extends = glm::vec3(0.75f, 0.05f, 0.05f);
+	glm::vec3 snow_half_extends = glm::vec3(0.75f, 0.05f, 0.25f);
+	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.4f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.0f, 0.0623f, 0.0f);
+
+	const float sph_temperature = 50.f;
+	const float dem_temperature = -15.f;
+
+	m_scene_params.fluid_start_time = 0.0f;
+	m_scene_params.solid_start_time = 0.0f;
+	*/
+
+
+	// two set melt	
+	/*
+	glm::vec3 fluid_half_extends = glm::vec3(0.15f, 0.15f, 0.15f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
-	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.0775f, 0.0f);
-	glm::vec3 snow_origin = glm::vec3(0.251f, 0.75f, 0.0f);
+	glm::vec3 fluid_origin = glm::vec3(0.0f, 0.75f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.0f, 0.26f, 0.0f);
+
+	const float sph_temperature = 10.f;
+	const float dem_temperature = -15.f;
+
+	m_scene_params.fluid_start_time = 0.3f;
+	m_scene_params.solid_start_time = 0.0f;
+	*/
+	
+	/*
+	// snow melt (water line)
+	glm::vec3 fluid_half_extends = glm::vec3(0.75f, 0.05f, 0.05f);
+	glm::vec3 snow_half_extends = glm::vec3(1.0f, 0.06125f, 1.0f);
+	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.4f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.0f, 0.0623f, 0.0f);
 	
 	const float sph_temperature = 50.f;
-	const float dem_temperature = -5.f;
+	const float dem_temperature = -15.f;
 	
-	m_scene_params.fluid_start_time = 0.f;
-	m_scene_params.solid_start_time = 0.5f;
+	m_scene_params.fluid_start_time = 0.2f;
+	m_scene_params.solid_start_time = 0.0f;
 	*/
+
 	
 	// water drop
 	glm::vec3 fluid_half_extends = glm::vec3(0.05f, 1.5f, 0.05f);
-	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
+	glm::vec3 snow_half_extends = glm::vec3(1.f, 0.125f, 1.f);
 	glm::vec3 fluid_origin = glm::vec3(0.0f, 2.5f, 0.0f);
 	glm::vec3 snow_origin = glm::vec3(0.f, 0.26f, 0.0f);
 
 	const float sph_temperature = 50.f;
-	const float dem_temperature = -5.f;
+	const float dem_temperature = -50.f;
 
 	m_scene_params.fluid_start_time = 0.0f;
 	m_scene_params.solid_start_time = 0.0f;
-
+	
 
 	m_particle_system->setHottestTemperature(sph_temperature + 0.1f * glm::abs(sph_temperature));
 	m_particle_system->setCoolestTemperature(dem_temperature - 0.1f * glm::abs(dem_temperature));
@@ -73,8 +103,12 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 
 	/*Set up parameters*/
 	SetupSimParams();
-	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, false);
-	GenerateParticleCube(snow_half_extends, snow_origin, 1, false);
+	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, true);
+	GenerateParticleCube(snow_half_extends, snow_origin, 1, true);
+
+	m_particle_system->setSPHInitialVelocity(glm::vec3(0.f,0,0));
+	m_particle_system->setDEMInitialVelocity(glm::vec3(0));
+
 	InitializeTemperature(m_particle_system->getSPHParticles()->m_temperature, sph_temperature);
 	InitializeTemperature(m_particle_system->getDEMParticles()->m_temperature, dem_temperature);
 	AppendParticleSets();
@@ -166,21 +200,38 @@ bool Simulation::StepCUDA(float dt)
 	if (!m_initialized)
 		return false;
 
+	static bool cd_on = true;
+	static bool sph_dem_correction = true;
+	static bool sph_sph_correction = false;
+	static bool compute_temperature = true;
+	static bool change_phase = true;
+	static bool simulate_freezing = true;
+	static bool simulate_melting = true;
+	static bool dem_friction = true;
+	static bool dem_viscosity = true;
+
+	static bool use_interlink = true;
+	static bool dynamic_connections = true;
+
+	{
+		ImGui::Begin("Control");
+		ImGui::SetWindowPos(ImVec2(100, 300), ImGuiSetCond_FirstUseEver);
+		ImGui::Checkbox("boundary CD", &cd_on);
+		ImGui::Checkbox("SPH-SPH distance correction", &sph_sph_correction);
+		ImGui::Checkbox("Phase change", &change_phase);
+		ImGui::Checkbox("Freezing", &simulate_freezing);
+		ImGui::Checkbox("Melting", &simulate_melting);
+		ImGui::Checkbox("DEM friction", &dem_friction);
+		ImGui::Checkbox("DEM viscosity", &dem_viscosity);
+		ImGui::Checkbox("Enable interlinks", &use_interlink);
+		ImGui::Checkbox("Dynamic connection number", &dynamic_connections);
+		ImGui::End();
+	}
+
+
 	if (m_pause)
 		return true;
 
-	bool cd_on = true;
-	bool sph_dem_correction = true;
-	bool sph_sph_correction = false;
-	bool compute_temperature = true;
-	bool change_phase = true;
-	bool simulate_freezing = false;
-	bool simulate_melting = true;
-	bool dem_friction = true;
-	bool dem_viscosity = true;
-
-	bool use_interlink = false;
-	bool dynamic_connections = false;
 
 	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 
@@ -246,12 +297,9 @@ bool Simulation::StepCUDA(float dt)
 		ImGui::Begin("Log");
 		ImGui::Text("SPH size: %u", sph_particles->m_size);
 		ImGui::Text("DEM size: %u", dem_particles->m_size);
-		//ImGui::Text("Integrate:   %.5lf (ms)", (t2 - t1).count() / 1000000.0f);
-		//ImGui::Text("Search:      %.5lf (ms)", (t3 - t2).count() / 1000000.0f);
-		//ImGui::Text("Solve:       %.5lf (ms)", (t4 - t3).count() / 1000000.0f);
 		ImGui::End();
 	}
-	
+
 	// Unmap CUDA buffer object
 	cudaGraphicsUnmapResources(1, &sph_vbo_resource[0], 0);
 	cudaGraphicsUnmapResources(1, &sph_vbo_resource[1], 0);
@@ -341,7 +389,7 @@ void Simulation::SetupSimParams()
 	//const size_t n_particles = 1000;
 	const float particle_mass = 0.0125f;
 	const float n_kernel_particles = 20.f;	
-	const float dem_sph_ratio = 1.0f;
+	const float dem_sph_ratio = 2.0f;
 	// water density = 1000 kg/m^3
 	m_rest_density = 1000.f; 
 	m_sph_particle_mass = particle_mass;
@@ -388,7 +436,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->static_friction = 0.9f;
 	m_sim_params->kinematic_friction = 0.75f;
 
-	m_sim_params->scorr_coeff = 0.1f;
+	m_sim_params->scorr_coeff = 0.f;// .1f;
 	m_sim_params->sor_coeff = 1.0f * (1.f/4.f);
 	m_sim_params->sph_viscosity = 0.01f;
 	m_sim_params->dem_viscosity = 0.1f;
@@ -399,7 +447,7 @@ void Simulation::SetupSimParams()
 	m_sim_params->k_snow = 25.f;
 	m_sim_params->k_water = 6.f;
 	m_sim_params->freezing_point = 0.f;
-	m_sim_params->T_homogeneous = -5.0f;
+	m_sim_params->T_homogeneous = -15.0f;
 
 	m_sim_params->blending_speed = 0.1f;
 
@@ -413,7 +461,7 @@ void Simulation::SetupSimParams()
 
 	m_sim_params->maximum_connection = m_particle_system->getMaximumConnection();
 	m_sim_params->k_refreezing = 0.1f; // PBD based stiffness (better with XPBD (haven't impelment yet))
-	m_sim_params->break_threshold = 1.1f;
+	m_sim_params->break_threshold = 1.05f;
 	m_particle_system->setParticleRadius(particle_radius);
 
 	set_sim_params(m_sim_params);

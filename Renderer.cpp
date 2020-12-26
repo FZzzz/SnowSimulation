@@ -560,8 +560,8 @@ void Renderer::SmoothDepth()
 	
 	// set uniforms
 	shader->SetUniformInt("depth_map", 0);
-	shader->SetUniformFloat("filter_radius", 3);
-	shader->SetUniformFloat("blur_scale", 0.01f);
+	shader->SetUniformFloat("filter_radius", 10);
+	shader->SetUniformFloat("blur_scale", 0.1f);
 	shader->SetUniformVec2("blur_dir", m_blur_dirY);
 	shader->SetUniformFloat("near_plane", 0.01f);
 	shader->SetUniformFloat("far_plane", 15.f);
