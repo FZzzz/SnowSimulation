@@ -72,7 +72,8 @@ void snow_simulation(
     bool         dem_viscosity,
     bool         use_interlink,
     bool         dynamic_max_connections,
-    bool         cd_on
+    bool         cd_on,
+    float        temperature_variation
 );
 
 #endif

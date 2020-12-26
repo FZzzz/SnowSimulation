@@ -4807,6 +4807,16 @@ void solve_snow_interlink_constraint(ParticleSet* dem_particles)
 }
 
 __global__
+void global_temperature_change(ParticleDeviceData target_data, float dT, uint num_particles)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+	if (index >= num_particles)
+		return;
+
+	target_data.m_d_T[index] += dT;
+}
+
+__global__
 void check_temperature(ParticleDeviceData data, uint num_particles)
 {
 	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
@@ -4814,6 +4824,20 @@ void check_temperature(ParticleDeviceData data, uint num_particles)
 		return;
 
 	printf("%.1f (%u)\n", data.m_d_T[index], index);
+}
+
+void environmental_heat_transfer(ParticleSet* sph_particles, ParticleSet* dem_particles, float dT, bool b_sph_step, bool b_dem_step)
+{
+	uint sph_num_threads, sph_num_blocks;
+	compute_grid_size(sph_particles->m_size, MAX_THREAD_NUM, sph_num_blocks, sph_num_threads);
+	uint dem_num_threads, dem_num_blocks;
+	compute_grid_size(dem_particles->m_size, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
+
+	if (b_sph_step)
+		global_temperature_change<<<sph_num_blocks, sph_num_threads>>>(sph_particles->m_device_data, dT, sph_particles->m_size);
+	if (b_dem_step)
+		global_temperature_change<<<dem_num_blocks, dem_num_threads>>>(dem_particles->m_device_data, dT, dem_particles->m_size);
+	getLastCudaError("Kernel execution failed: global_temperature_change ");
 }
 
 void snow_simulation(
@@ -4838,7 +4862,8 @@ void snow_simulation(
 	bool dem_viscosity,
 	bool use_interlink,
 	bool dynamic_max_connections,
-	bool cd_on
+	bool cd_on,
+	float temperature_variation
 )
 {
 	bool b_step_sph = (scene_params.current_time >= scene_params.fluid_start_time);
@@ -4905,6 +4930,12 @@ void snow_simulation(
 			dem_num_blocks,
 			dem_num_threads
 		);
+
+		environmental_heat_transfer(
+			sph_particles, 
+			dem_particles, 
+			temperature_variation, 
+			b_step_sph, b_step_dem);
 	}
 
 	if(change_phase)

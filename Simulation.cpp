@@ -67,21 +67,21 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_scene_params.solid_start_time = 0.0f;
 	*/
 	
-	/*
-	// snow melt (water line)
-	glm::vec3 fluid_half_extends = glm::vec3(0.75f, 0.05f, 0.05f);
-	glm::vec3 snow_half_extends = glm::vec3(1.0f, 0.06125f, 1.0f);
-	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.4f, 0.0f);
-	glm::vec3 snow_origin = glm::vec3(0.0f, 0.0623f, 0.0f);
 	
-	const float sph_temperature = 50.f;
-	const float dem_temperature = -15.f;
+	// snow melt (water line)
+	glm::vec3 fluid_half_extends = glm::vec3(0.75f, 0.05f, 0.1f);
+	glm::vec3 snow_half_extends = glm::vec3(0.8f, 0.125f, 0.8f);
+	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.35f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.0f, 0.13f, 0.0f);
+	
+	const float sph_temperature = 10.f;
+	const float dem_temperature = -5.f;
 	
 	m_scene_params.fluid_start_time = 0.2f;
 	m_scene_params.solid_start_time = 0.0f;
-	*/
-
 	
+
+	/*
 	// water drop
 	glm::vec3 fluid_half_extends = glm::vec3(0.05f, 1.5f, 0.05f);
 	glm::vec3 snow_half_extends = glm::vec3(1.f, 0.125f, 1.f);
@@ -93,7 +93,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 
 	m_scene_params.fluid_start_time = 0.0f;
 	m_scene_params.solid_start_time = 0.0f;
-	
+	*/
 
 	m_particle_system->setHottestTemperature(sph_temperature + 0.1f * glm::abs(sph_temperature));
 	m_particle_system->setCoolestTemperature(dem_temperature - 0.1f * glm::abs(dem_temperature));
@@ -211,10 +211,11 @@ bool Simulation::StepCUDA(float dt)
 	static bool dem_viscosity = true;
 
 	static bool use_interlink = true;
-	static bool dynamic_connections = true;
+	static bool dynamic_connections = false;
+	static float temperature_variation = 0.f;
 
 	{
-		ImGui::Begin("Control");
+		ImGui::Begin("Controls");
 		ImGui::SetWindowPos(ImVec2(100, 300), ImGuiSetCond_FirstUseEver);
 		ImGui::Checkbox("boundary CD", &cd_on);
 		ImGui::Checkbox("SPH-SPH distance correction", &sph_sph_correction);
@@ -225,6 +226,7 @@ bool Simulation::StepCUDA(float dt)
 		ImGui::Checkbox("DEM viscosity", &dem_viscosity);
 		ImGui::Checkbox("Enable interlinks", &use_interlink);
 		ImGui::Checkbox("Dynamic connection number", &dynamic_connections);
+		ImGui::SliderFloat("dT", &temperature_variation, -0.01f, 0.01f, "%.3f");
 		ImGui::End();
 	}
 
@@ -288,7 +290,8 @@ bool Simulation::StepCUDA(float dt)
 		dem_viscosity,
 		use_interlink,
 		dynamic_connections,
-		cd_on
+		cd_on,
+		temperature_variation
 		);
 
 	t4 = std::chrono::high_resolution_clock::now();
@@ -389,7 +392,7 @@ void Simulation::SetupSimParams()
 	//const size_t n_particles = 1000;
 	const float particle_mass = 0.0125f;
 	const float n_kernel_particles = 20.f;	
-	const float dem_sph_ratio = 2.0f;
+	const float dem_sph_ratio = 1.0f;
 	// water density = 1000 kg/m^3
 	m_rest_density = 1000.f; 
 	m_sph_particle_mass = particle_mass;
@@ -404,7 +407,7 @@ void Simulation::SetupSimParams()
 	m_particle_system->setParticleRadius(particle_radius);
 
 	/*Maximum interlink connections*/
-	m_particle_system->setMaximumConnection(20);
+	m_particle_system->setMaximumConnection(10);
 
 	std::cout << "Particle mass: " << particle_mass << std::endl;
 	std::cout << "Effective radius: " << effective_radius << std::endl;
@@ -415,7 +418,7 @@ void Simulation::SetupSimParams()
 
 	m_sim_params->gravity = make_float3(0.f, -9.8f, 0.f);
 	m_sim_params->global_damping = 1.0;
-	m_sim_params->maximum_speed = 10.f;
+	m_sim_params->maximum_speed = 3.f;
 	m_sim_params->minimum_speed = 0.0f;// 01f * particle_radius * m_dt * m_dt;
 
 	m_sim_params->particle_radius = particle_radius;
@@ -447,9 +450,9 @@ void Simulation::SetupSimParams()
 	m_sim_params->k_snow = 25.f;
 	m_sim_params->k_water = 6.f;
 	m_sim_params->freezing_point = 0.f;
-	m_sim_params->T_homogeneous = -15.0f;
+	m_sim_params->T_homogeneous = -30.0f;
 
-	m_sim_params->blending_speed = 0.1f;
+	m_sim_params->blending_speed = 0.01f;
 
 	// set up sph kernel constants
 	m_sim_params->poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));
@@ -686,9 +689,9 @@ void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, 
 
 				if (use_jitter)
 				{
-					float x_jitter = 0.001f * diameter * static_cast<float>(rand() % 3);
-					float y_jitter = 0.001f * diameter * static_cast<float>(rand() % 3);
-					float z_jitter = 0.001f * diameter * static_cast<float>(rand() % 3);
+					float x_jitter = 0.025f * diameter * static_cast<float>(rand() % 3);
+					float y_jitter = 0.025f * diameter * static_cast<float>(rand() % 3);
+					float z_jitter = 0.025f * diameter * static_cast<float>(rand() % 3);
 					x += x_jitter;
 					y += y_jitter;
 					z += z_jitter;
