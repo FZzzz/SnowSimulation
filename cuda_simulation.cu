@@ -2089,7 +2089,7 @@ void compute_sph_dem_distance_correction(
 	if (isnan(corr.x))
 		printf("2088 nan\n");
 
-	sph_data.m_d_correction[original_index] += corr;
+	sph_data.m_d_correction[original_index] += params.k_stretch * corr;
 }
 
 __global__
@@ -2134,7 +2134,7 @@ void compute_dem_sph_distance_correction(
 	}
 
 	//corr_{new_dem} = (1-a) corr_{sph} + "a corr_{dem}"
-	corr *= dem_data.m_d_contrib[original_index];
+	corr *= params.k_stretch * dem_data.m_d_contrib[original_index];
 
 
 	if (isnan(corr.x))

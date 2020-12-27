@@ -26,6 +26,8 @@ struct SimParams
 	float  static_friction;
 	float  kinematic_friction;
 	
+	float k_stretch;
+
 	// heat conduction coeffcients
 	float  k_water;
 	float  k_snow;

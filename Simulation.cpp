@@ -74,8 +74,8 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.35f, 0.0f);
 	glm::vec3 snow_origin = glm::vec3(0.0f, 0.13f, 0.0f);
 	
-	const float sph_temperature = 10.f;
-	const float dem_temperature = -5.f;
+	const float sph_temperature = 25.f;
+	const float dem_temperature = -10.f;
 	
 	m_scene_params.fluid_start_time = 0.2f;
 	m_scene_params.solid_start_time = 0.0f;
@@ -390,7 +390,7 @@ void Simulation::setClipLength(int length)
 void Simulation::SetupSimParams()
 {
 	//const size_t n_particles = 1000;
-	const float particle_mass = 0.0125f;
+	const float particle_mass = 0.01f;
 	const float n_kernel_particles = 20.f;	
 	const float dem_sph_ratio = 1.0f;
 	// water density = 1000 kg/m^3
@@ -418,7 +418,7 @@ void Simulation::SetupSimParams()
 
 	m_sim_params->gravity = make_float3(0.f, -9.8f, 0.f);
 	m_sim_params->global_damping = 1.0;
-	m_sim_params->maximum_speed = 3.f;
+	m_sim_params->maximum_speed = 10.f;
 	m_sim_params->minimum_speed = 0.0f;// 01f * particle_radius * m_dt * m_dt;
 
 	m_sim_params->particle_radius = particle_radius;
@@ -436,13 +436,15 @@ void Simulation::SetupSimParams()
 	//coupling coefficients
 	//m_sim_params->sph_dem_corr = 0.05f;
 
-	m_sim_params->static_friction = 0.9f;
-	m_sim_params->kinematic_friction = 0.75f;
+	m_sim_params->static_friction = 0.5f;
+	m_sim_params->kinematic_friction = 0.35f;
 
 	m_sim_params->scorr_coeff = 0.f;// .1f;
 	m_sim_params->sor_coeff = 1.0f * (1.f/4.f);
 	m_sim_params->sph_viscosity = 0.01f;
 	m_sim_params->dem_viscosity = 0.1f;
+
+	m_sim_params->k_stretch = 0.25f;
 
 	//set up heat conduction constants
 	m_sim_params->C_snow = 2090.f;
