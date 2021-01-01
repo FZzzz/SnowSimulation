@@ -71,6 +71,7 @@ private:
 	GLFWcursor* m_mouseCursors[ImGuiMouseCursor_COUNT];
 
 	double m_previousTime, m_currentTime, m_deltaTime;
+	float m_time_step;
 	
 	/*Importer*/
 	std::shared_ptr<AssetImporter> m_importer;

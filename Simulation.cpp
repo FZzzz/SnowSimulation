@@ -51,6 +51,47 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_scene_params.fluid_start_time = 0.0f;
 	m_scene_params.solid_start_time = 0.0f;
 	*/
+	
+	/*
+	//plain snow drop
+	glm::vec3 fluid_half_extends = glm::vec3(0.1f, 0.1f, 0.1f);
+	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
+	glm::vec3 fluid_origin = glm::vec3(-0.0f, 100.f, 0.0f); // invisible in this scene
+	glm::vec3 snow_origin = glm::vec3(0.0f, 0.63f, 0.0f);
+
+	const float sph_temperature = 25.f;
+	const float dem_temperature = -10.f;
+
+	m_scene_params.fluid_start_time = 10000.0f;
+	m_scene_params.solid_start_time = 0.0f;
+	*/
+
+	/* water drop melt snow */
+	glm::vec3 fluid_half_extends = glm::vec3(0.1f, 1.0f, 0.1f);
+	glm::vec3 snow_half_extends = glm::vec3(0.5f, 0.25f, 0.5f);
+	glm::vec3 fluid_origin = glm::vec3(-0.0f, 2.f, 0.0f); // invisible in this scene
+	glm::vec3 snow_origin = glm::vec3(0.0f, 0.63f, 0.0f);
+
+	const float sph_temperature = 500.f;
+	const float dem_temperature = -10.f;
+
+	m_scene_params.fluid_start_time = 0.2f;
+	m_scene_params.solid_start_time = 0.0f;
+
+
+	/*
+	//snow melt in water
+	glm::vec3 fluid_half_extends = glm::vec3(0.98f, 0.1f, 0.98f);
+	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
+	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.11f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.0f, 0.63f, 0.0f);
+
+	const float sph_temperature = 25.f;
+	const float dem_temperature = -10.f;
+
+	m_scene_params.fluid_start_time = 0.0f;
+	m_scene_params.solid_start_time = 0.0f;
+	*/
 
 
 	// two set melt	
@@ -67,7 +108,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_scene_params.solid_start_time = 0.0f;
 	*/
 	
-	
+	/*
 	// snow melt (water line)
 	glm::vec3 fluid_half_extends = glm::vec3(0.75f, 0.05f, 0.1f);
 	glm::vec3 snow_half_extends = glm::vec3(0.8f, 0.125f, 0.8f);
@@ -79,7 +120,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	
 	m_scene_params.fluid_start_time = 0.2f;
 	m_scene_params.solid_start_time = 0.0f;
-	
+	*/
 
 	/*
 	// water drop
@@ -648,6 +689,7 @@ void Simulation::InitializeTemperature(std::vector<float>& target, float tempera
 
 void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, int opt, bool use_jitter=false)
 {
+	const float jitter_strength = 0.01f;
 	std::srand(time(NULL));
 	// diameter of particle
 	const float diameter = 2.f * m_sim_params->particle_radius;
@@ -691,9 +733,9 @@ void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, 
 
 				if (use_jitter)
 				{
-					float x_jitter = 0.025f * diameter * static_cast<float>(rand() % 3);
-					float y_jitter = 0.025f * diameter * static_cast<float>(rand() % 3);
-					float z_jitter = 0.025f * diameter * static_cast<float>(rand() % 3);
+					float x_jitter = jitter_strength * diameter * static_cast<float>(rand() % 3);
+					float y_jitter = jitter_strength * diameter * static_cast<float>(rand() % 3);
+					float z_jitter = jitter_strength * diameter * static_cast<float>(rand() % 3);
 					x += x_jitter;
 					y += y_jitter;
 					z += z_jitter;
