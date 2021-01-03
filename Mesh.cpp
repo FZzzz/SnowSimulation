@@ -500,6 +500,11 @@ void Mesh::setIndices(std::vector<unsigned int>& indices)
 	m_indices = std::move(indices);
 }
 
+void Mesh::setTexture(GLuint texture)
+{
+	m_texture = texture;
+}
+
 void Mesh::setTexCoord(std::vector<glm::vec2>& texcoords)
 {
 	m_texcoord = std::move(texcoords);

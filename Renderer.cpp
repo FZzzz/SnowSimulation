@@ -217,8 +217,12 @@ void Renderer::RenderGameObject(const std::shared_ptr<Shader>& shader, const std
 	shader->SetUniformMat4("modelMat", transform.getModelMatWorld());
 	//shader->SetUniformMat4("lightSpaceMatrix", light_mat);
 
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, mesh->getTexture());
+
 	// shadow map configuration
 	shader->SetUniformInt("shadowMap", 0);
+	shader->SetUniformInt("diffuseTexture", 1);
 	shader->SetUniformVec3("lightPos", m_mainCamera->m_position);
 	shader->SetUniformVec3("viewPos", m_mainCamera->m_position);
 
@@ -561,7 +565,7 @@ void Renderer::SmoothDepth()
 	// set uniforms
 	shader->SetUniformInt("depth_map", 0);
 	shader->SetUniformFloat("filter_radius", 10);
-	shader->SetUniformFloat("blur_scale", 0.1f);
+	shader->SetUniformFloat("blur_scale", 0.01f);
 	shader->SetUniformVec2("blur_dir", m_blur_dirY);
 	shader->SetUniformFloat("near_plane", 0.01f);
 	shader->SetUniformFloat("far_plane", 15.f);

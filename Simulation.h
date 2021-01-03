@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <memory>
 #include <vector>
+#include <chrono>
 #include "Constraints.h"
 #include "ConstraintSolver.h"
 #include "Collider.h"
@@ -110,6 +111,12 @@ private:
 	SceneParams m_scene_params;
 	
 	float m_dt;
+
+	/* measurements */
+	std::chrono::steady_clock::time_point t1, t2;
+	float time_sum = 0.f;
+	float avg_sim_time = 0.f;
+	std::string perf_log_msg;
 
 };
 

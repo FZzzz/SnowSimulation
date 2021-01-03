@@ -9,7 +9,10 @@
 #include <chrono>
 #include <cstdlib>
 #include <algorithm>
+#include <fstream>
 #include "cuda_simulation.cuh"
+//#include "util.h"
+#include <string>
 
 Simulation::Simulation()
 	: m_solver(nullptr), m_particle_system(nullptr), m_neighbor_searcher(nullptr),
@@ -66,30 +69,31 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_scene_params.solid_start_time = 0.0f;
 	*/
 
-	/* water drop melt snow */
+	
+	//snow melt in water
+	glm::vec3 fluid_half_extends = glm::vec3(0.98f, 0.05f, 0.98f);
+	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
+	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.051f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.0f, 0.8f, 0.0f);
+
+	const float sph_temperature = 1.f;
+	const float dem_temperature = -100.f;
+
+	m_scene_params.fluid_start_time = 0.0f;
+	m_scene_params.solid_start_time = 0.3f;
+	
+
+	/*
+	// water drop melt snow 	
 	glm::vec3 fluid_half_extends = glm::vec3(0.1f, 1.0f, 0.1f);
 	glm::vec3 snow_half_extends = glm::vec3(0.5f, 0.25f, 0.5f);
 	glm::vec3 fluid_origin = glm::vec3(-0.0f, 2.f, 0.0f); // invisible in this scene
-	glm::vec3 snow_origin = glm::vec3(0.0f, 0.63f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.0f, 0.3f, 0.0f);
 
-	const float sph_temperature = 500.f;
+	const float sph_temperature = 100.f;
 	const float dem_temperature = -10.f;
 
 	m_scene_params.fluid_start_time = 0.2f;
-	m_scene_params.solid_start_time = 0.0f;
-
-
-	/*
-	//snow melt in water
-	glm::vec3 fluid_half_extends = glm::vec3(0.98f, 0.1f, 0.98f);
-	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
-	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.11f, 0.0f);
-	glm::vec3 snow_origin = glm::vec3(0.0f, 0.63f, 0.0f);
-
-	const float sph_temperature = 25.f;
-	const float dem_temperature = -10.f;
-
-	m_scene_params.fluid_start_time = 0.0f;
 	m_scene_params.solid_start_time = 0.0f;
 	*/
 
@@ -136,8 +140,8 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_scene_params.solid_start_time = 0.0f;
 	*/
 
-	m_particle_system->setHottestTemperature(sph_temperature + 0.1f * glm::abs(sph_temperature));
-	m_particle_system->setCoolestTemperature(dem_temperature - 0.1f * glm::abs(dem_temperature));
+	m_particle_system->setHottestTemperature(sph_temperature);// +0.1f * glm::abs(sph_temperature));
+	m_particle_system->setCoolestTemperature(dem_temperature);// -0.1f * glm::abs(dem_temperature));
 
 	m_neighbor_searcher = std::make_shared<NeighborSearch>(m_particle_system, grid_size);
 	m_solver = std::make_shared<ConstraintSolver>(mode);
@@ -241,6 +245,7 @@ bool Simulation::StepCUDA(float dt)
 	if (!m_initialized)
 		return false;
 
+	static int count = 0;
 	static bool cd_on = true;
 	static bool sph_dem_correction = true;
 	static bool sph_sph_correction = false;
@@ -252,7 +257,7 @@ bool Simulation::StepCUDA(float dt)
 	static bool dem_viscosity = true;
 
 	static bool use_interlink = true;
-	static bool dynamic_connections = false;
+	static bool dynamic_connections = true;
 	static float temperature_variation = 0.f;
 
 	{
@@ -275,8 +280,6 @@ bool Simulation::StepCUDA(float dt)
 	if (m_pause)
 		return true;
 
-
-	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
 
 	ParticleSet* sph_particles = m_particle_system->getSPHParticles();
 	ParticleSet* dem_particles = m_particle_system->getDEMParticles();
@@ -308,7 +311,7 @@ bool Simulation::StepCUDA(float dt)
 	cudaGraphicsResourceGetMappedPointer((void**)&(dem_particles->m_device_data.m_d_T), &num_bytes, dem_vbo_resource[1]);
 	cudaGraphicsResourceGetMappedPointer((void**)&(boundary_particles->m_device_data.m_d_positions), &num_bytes, *b_vbo_resource);
 	
-	t3 = std::chrono::high_resolution_clock::now();
+	t1 = std::chrono::high_resolution_clock::now();
 
 	snow_simulation(
 		sph_particles,
@@ -335,7 +338,21 @@ bool Simulation::StepCUDA(float dt)
 		temperature_variation
 		);
 
-	t4 = std::chrono::high_resolution_clock::now();
+	t2 = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<float, std::milli> fp_ms = t2 - t1;
+
+	time_sum += fp_ms.count();
+	avg_sim_time = (float)time_sum / (float)count;
+
+	{
+		perf_log_msg += 
+			std::to_string(fp_ms.count()) 
+			+ " " 
+			+ std::to_string(dem_particles->m_size) 
+			+ " " 
+			+ std::to_string(sph_particles->m_size) 
+			+ "\n";
+	}
 
 	{
 		ImGui::Begin("Log");
@@ -343,6 +360,16 @@ bool Simulation::StepCUDA(float dt)
 		ImGui::Text("DEM size: %u", dem_particles->m_size);
 		ImGui::End();
 	}
+
+	{
+		ImGui::Begin("Performance");
+		ImGui::SetWindowPos(ImVec2(90, 600), ImGuiSetCond_Always);
+		ImGui::SetWindowSize(ImVec2(300, 100), ImGuiSetCond_Always);
+		ImGui::Text("Average processing time: %.3f ms", avg_sim_time);
+		ImGui::End();
+	}
+	
+
 
 	// Unmap CUDA buffer object
 	cudaGraphicsUnmapResources(1, &sph_vbo_resource[0], 0);
@@ -352,11 +379,25 @@ bool Simulation::StepCUDA(float dt)
 	cudaGraphicsUnmapResources(1, b_vbo_resource, 0);
 	//m_pause = true;
 
-	static int count = 0;
+	
 	if(!m_pause) count++;
 	
 	if (count == m_clip_length)
+	{
 		m_pause = true, count = 0;
+
+		std::fstream fs("perf_log.txt", std::ios_base::trunc | std::ios_base::out);
+		if (!fs.is_open())
+		{
+			std::cout << "Unable to open file\n" << std::endl;
+		}
+		else
+		{
+			fs << perf_log_msg;
+			fs.close();
+		}		
+	}
+		
 	
 	return true;
 }
@@ -490,8 +531,8 @@ void Simulation::SetupSimParams()
 	//set up heat conduction constants
 	m_sim_params->C_snow = 2090.f;
 	m_sim_params->C_water = 4182.f;
-	m_sim_params->k_snow = 25.f;
-	m_sim_params->k_water = 6.f;
+	m_sim_params->k_snow = 2500.f;
+	m_sim_params->k_water = 600.f;
 	m_sim_params->freezing_point = 0.f;
 	m_sim_params->T_homogeneous = -30.0f;
 
@@ -689,7 +730,7 @@ void Simulation::InitializeTemperature(std::vector<float>& target, float tempera
 
 void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, int opt, bool use_jitter=false)
 {
-	const float jitter_strength = 0.01f;
+	const float jitter_strength = 0.00025f;
 	std::srand(time(NULL));
 	// diameter of particle
 	const float diameter = 2.f * m_sim_params->particle_radius;

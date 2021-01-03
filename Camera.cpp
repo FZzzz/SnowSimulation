@@ -17,7 +17,7 @@ Camera::Camera(CameraDesc desc) :
 	m_rotate_radius = glm::distance(m_position, m_target_position);
 
 	m_front = glm::normalize( m_target_position - m_position);
-	glm::mat4 vec_rot = glm::toMat4(RotateBetweenVectors(m_front, glm::vec3(0, 0, -1)));
+	glm::mat4 vec_rot = glm::toMat4(UtilFunctions::RotateBetweenVectors(m_front, glm::vec3(0, 0, -1)));
 
 	m_right = glm::normalize(glm::vec3(vec_rot * glm::vec4(1, 0, 0, 1)));
 	m_up = glm::normalize(glm::cross(m_right, m_front));

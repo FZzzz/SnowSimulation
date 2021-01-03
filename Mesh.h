@@ -60,6 +60,7 @@ public:
 	void setNormals(std::vector<glm::vec3>& normals);
 	void setTexCoord(std::vector<glm::vec2>& texcoords);
 	void setIndices(std::vector<unsigned int>& indices);
+	void setTexture(GLuint texture);
 
 	void setShader(std::shared_ptr<Shader> shader);
 	//void setRenderOption(RENDER_ENUM render_option);
@@ -76,7 +77,7 @@ public:
 	inline const size_t						getNumberOfIndices() { return m_indices.size(); };
 	inline const GLuint&					getVAO() { return m_vao; };
 	inline const GLuint&					getEBO() { return m_ebo; };
-	
+	inline const GLuint						getTexture() { return m_texture; };
 	
 	GLuint textureID;
 	
@@ -101,6 +102,8 @@ protected: // for inheritance? why use protected?
 	GLuint						m_vao; //vertex buffer
 	GLuint						m_vbo[3]; //pos, normal, text
 	GLuint						m_ebo; // element buffer -- indices
+
+	GLuint						m_texture;
 
 private:
 	

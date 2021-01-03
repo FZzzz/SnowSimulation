@@ -10,6 +10,9 @@ in VS_OUT {
 //uniform sampler2D diffuseTexture;
 uniform sampler2D shadowMap;
 
+//texture
+uniform sampler2D diffuseTexture;
+
 // directional light
 uniform vec3 lightPos;
 uniform vec3 viewPos;
@@ -55,8 +58,10 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 lightDir, vec3 normal)
 
 void main()
 {           
-    //vec3 color = texture(diffuseTexture, fs_in.TexCoords).rgb;
-    vec3 color = vec3(1.0f);
+    vec3 color = texture(diffuseTexture, fs_in.TexCoords).rgb;
+    //vec3 color = texture(terrain_texture)
+
+    //vec3 color = vec3(1.0f);
     vec3 fdx = dFdx(fs_in.FragPos);
     vec3 fdy = dFdy(fs_in.FragPos);
     vec3 normal = normalize(cross(fdx, fdy));
