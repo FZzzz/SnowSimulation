@@ -242,7 +242,7 @@ bool GLFWApp::Initialize(int width , int height , const std::string &title)
 	{
 		m_time_step = 0.00125f;
 		uint32_t iterations = 3;
-		int clip_length = 200;
+		int clip_length = 5000;
 		m_simulator->SetSolverIteration(iterations);
 		m_simulator->setClipLength(clip_length);
 	}

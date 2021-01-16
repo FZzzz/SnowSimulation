@@ -69,8 +69,8 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_scene_params.solid_start_time = 0.0f;
 	*/
 
-	
-	//snow melt in water
+	/*
+	// freezing
 	glm::vec3 fluid_half_extends = glm::vec3(0.98f, 0.05f, 0.98f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
 	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.051f, 0.0f);
@@ -81,12 +81,26 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 
 	m_scene_params.fluid_start_time = 0.0f;
 	m_scene_params.solid_start_time = 0.3f;
-	
+	*/
 
 	/*
+	glm::vec3 fluid_half_extends = glm::vec3(0.999f, 0.1f, 0.999f);
+	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
+	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.101f, 0.0f);
+	glm::vec3 snow_origin = glm::vec3(0.0f, 0.8f, 0.0f);
+
+	const float sph_temperature = 50.f;
+	const float dem_temperature = -10.f;
+
+	m_scene_params.fluid_start_time = 0.0f;
+	m_scene_params.solid_start_time = 0.3f;
+	*/
+
+
+	
 	// water drop melt snow 	
 	glm::vec3 fluid_half_extends = glm::vec3(0.1f, 1.0f, 0.1f);
-	glm::vec3 snow_half_extends = glm::vec3(0.5f, 0.25f, 0.5f);
+	glm::vec3 snow_half_extends = glm::vec3(0.9f, 0.25f, 0.9f);
 	glm::vec3 fluid_origin = glm::vec3(-0.0f, 2.f, 0.0f); // invisible in this scene
 	glm::vec3 snow_origin = glm::vec3(0.0f, 0.3f, 0.0f);
 
@@ -95,7 +109,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 
 	m_scene_params.fluid_start_time = 0.2f;
 	m_scene_params.solid_start_time = 0.0f;
-	*/
+	
 
 
 	// two set melt	
@@ -531,8 +545,8 @@ void Simulation::SetupSimParams()
 	//set up heat conduction constants
 	m_sim_params->C_snow = 2090.f;
 	m_sim_params->C_water = 4182.f;
-	m_sim_params->k_snow = 2500.f;
-	m_sim_params->k_water = 600.f;
+	m_sim_params->k_snow = 250.f;
+	m_sim_params->k_water = 60.f;
 	m_sim_params->freezing_point = 0.f;
 	m_sim_params->T_homogeneous = -30.0f;
 
