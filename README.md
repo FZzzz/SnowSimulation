@@ -46,7 +46,7 @@ Open `SnowSimulation.sln` and build it with Visual Studio 2019
 |Number of snow particles | 147928|
 
 
-|  Per frame seconds |          |
+|  Per frame time |          |
 | -------- | -------- |
 | Min  | 41.025 (ms)|
 | Max  | 73.729 (ms) |
