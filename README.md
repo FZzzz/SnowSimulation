@@ -55,6 +55,14 @@ Open `SnowSimulation.sln` and build it with Visual Studio 2019
 
 **For more information, please reference to our paper (should be published in near future by the school)**
 
+## DEMO Videos
+https://www.youtube.com/watch?v=crHYuIADOQc
+
+https://www.youtube.com/watch?v=4AIvfJd8CYo
+
+
+
+
 ## License
 Copyright 2021 Chen Yi
 
