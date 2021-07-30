@@ -38,6 +38,8 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	
 	uint3 grid_size = make_uint3(64, 64, 64);
 
+	//m_sim_params = new SimParams();
+
 	/*
 	// Debug
 	glm::vec3 fluid_half_extends = glm::vec3(0.75f, 0.05f, 0.05f);
@@ -52,7 +54,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_scene_params.solid_start_time = 0.0f;
 	*/
 	
-	/*
+	
 	//plain snow drop
 	glm::vec3 fluid_half_extends = glm::vec3(0.1f, 0.1f, 0.1f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
@@ -64,20 +66,20 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 
 	m_scene_params.fluid_start_time = 10000.0f;
 	m_scene_params.solid_start_time = 0.0f;
+	
+
+	/* water drop melt snow 
+	glm::vec3 fluid_half_extends = glm::vec3(0.98f, 0.15f, 0.98f);
+	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
+	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.151f, 0.0f); // invisible in this scene
+	glm::vec3 snow_origin = glm::vec3(0.0f, 0.75f, 0.0f);
+
+	const float sph_temperature = 1.f;
+	const float dem_temperature = -100.f;
+
+	m_scene_params.fluid_start_time = 0.0f;
+	m_scene_params.solid_start_time = 0.1f;
 	*/
-
-	/* water drop melt snow */
-	glm::vec3 fluid_half_extends = glm::vec3(0.1f, 1.0f, 0.1f);
-	glm::vec3 snow_half_extends = glm::vec3(0.5f, 0.25f, 0.5f);
-	glm::vec3 fluid_origin = glm::vec3(-0.0f, 2.f, 0.0f); // invisible in this scene
-	glm::vec3 snow_origin = glm::vec3(0.0f, 0.63f, 0.0f);
-
-	const float sph_temperature = 500.f;
-	const float dem_temperature = -10.f;
-
-	m_scene_params.fluid_start_time = 0.2f;
-	m_scene_params.solid_start_time = 0.0f;
-
 
 	/*
 	//snow melt in water
@@ -96,12 +98,12 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 
 	// two set melt	
 	/*
-	glm::vec3 fluid_half_extends = glm::vec3(0.15f, 0.15f, 0.15f);
+	glm::vec3 fluid_half_extends = glm::vec3(0.15f, 0.25f, 0.15f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
-	glm::vec3 fluid_origin = glm::vec3(0.0f, 0.75f, 0.0f);
+	glm::vec3 fluid_origin = glm::vec3(0.0f, 5.75f, 0.0f);
 	glm::vec3 snow_origin = glm::vec3(0.0f, 0.26f, 0.0f);
 
-	const float sph_temperature = 10.f;
+	const float sph_temperature = 500.f;
 	const float dem_temperature = -15.f;
 
 	m_scene_params.fluid_start_time = 0.3f;
@@ -145,7 +147,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	/*Set up parameters*/
 	SetupSimParams();
 	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, true);
-	GenerateParticleCube(snow_half_extends, snow_origin, 1, true);
+	GenerateParticleCube2(snow_half_extends, snow_origin, 1, false);
 
 	m_particle_system->setSPHInitialVelocity(glm::vec3(0.f,0,0));
 	m_particle_system->setDEMInitialVelocity(glm::vec3(0));
@@ -448,66 +450,67 @@ void Simulation::SetupSimParams()
 	m_particle_system->setParticleRadius(particle_radius);
 
 	/*Maximum interlink connections*/
-	m_particle_system->setMaximumConnection(10);
+	m_particle_system->setMaximumConnection(25);
 
 	std::cout << "Particle mass: " << particle_mass << std::endl;
 	std::cout << "Effective radius: " << effective_radius << std::endl;
 	std::cout << "Particle radius: " << particle_radius << std::endl;
 	std::cout << "Maximum connection: " << m_particle_system->getMaximumConnection() << std::endl;
 
-	m_sim_params = new SimParams();
+	//if(m_sim_params == nullptr)
+		//m_sim_params = new SimParams();
 
-	m_sim_params->gravity = make_float3(0.f, -9.8f, 0.f);
-	m_sim_params->global_damping = 1.0;
-	m_sim_params->maximum_speed = 10.f;
-	m_sim_params->minimum_speed = 0.0f;// 01f * particle_radius * m_dt * m_dt;
+	m_sim_params.gravity = make_float3(0.f, -9.8f, 0.f);
+	m_sim_params.global_damping = 1.0;
+	m_sim_params.maximum_speed = 10.f;
+	m_sim_params.minimum_speed = 0.0f;// 01f * particle_radius * m_dt * m_dt;
 
-	m_sim_params->particle_radius = particle_radius;
-	m_sim_params->effective_radius = effective_radius;
-	m_sim_params->rest_density = m_rest_density;
-	m_sim_params->epsilon = 100.f;
-	m_sim_params->pbd_epsilon = 0.01f * particle_radius;
-	m_sim_params->kernel_epsilon = 0.01f * effective_radius;
-	m_sim_params->grid_size = m_neighbor_searcher->m_grid_size;
-	m_sim_params->num_cells = m_neighbor_searcher->m_num_grid_cells;
-	m_sim_params->world_origin = make_float3(0, 0, 0);
-	m_sim_params->cell_size = make_float3(m_sim_params->effective_radius);
-	m_sim_params->boundary_damping = 0.15f;
+	m_sim_params.particle_radius = particle_radius;
+	m_sim_params.effective_radius = effective_radius;
+	m_sim_params.rest_density = m_rest_density;
+	m_sim_params.epsilon = 100.f;
+	m_sim_params.pbd_epsilon = 0.01f * particle_radius;
+	m_sim_params.kernel_epsilon = 0.01f * effective_radius;
+	m_sim_params.grid_size = m_neighbor_searcher->m_grid_size;
+	m_sim_params.num_cells = m_neighbor_searcher->m_num_grid_cells;
+	m_sim_params.world_origin = make_float3(0, 0, 0);
+	m_sim_params.cell_size = make_float3(m_sim_params.effective_radius);
+	m_sim_params.boundary_damping = 0.15f;
 	
 	//coupling coefficients
-	//m_sim_params->sph_dem_corr = 0.05f;
+	//m_sim_params.sph_dem_corr = 0.05f;
 
-	m_sim_params->static_friction = 0.5f;
-	m_sim_params->kinematic_friction = 0.35f;
+	m_sim_params.static_friction = 0.5f;
+	m_sim_params.kinematic_friction = 0.35f;
 
-	m_sim_params->scorr_coeff = 0.f;// .1f;
-	m_sim_params->sor_coeff = 1.0f * (1.f/4.f);
-	m_sim_params->sph_viscosity = 0.01f;
-	m_sim_params->dem_viscosity = 0.1f;
+	m_sim_params.scorr_coeff = 0.f;// .1f;
+	m_sim_params.sor_coeff = 1.0f * (1.f/4.f);
+	m_sim_params.sph_viscosity = 0.01f;
+	m_sim_params.dem_viscosity = 0.1f;
 
-	m_sim_params->k_stretch = 0.25f;
+	m_sim_params.k_stretch = 0.25f;
 
 	//set up heat conduction constants
-	m_sim_params->C_snow = 2090.f;
-	m_sim_params->C_water = 4182.f;
-	m_sim_params->k_snow = 25.f;
-	m_sim_params->k_water = 6.f;
-	m_sim_params->freezing_point = 0.f;
-	m_sim_params->T_homogeneous = -30.0f;
+	m_sim_params.C_snow = 2090.f;
+	m_sim_params.C_water = 4182.f;
+	m_sim_params.k_snow = 25.f;
+	m_sim_params.k_water = 6.f;
+	m_sim_params.freezing_point = 0.f;
+	m_sim_params.T_homogeneous = -30.0f;
 
-	m_sim_params->blending_speed = 0.01f;
+	m_sim_params.blending_speed = 0.01f;
 
 	// set up sph kernel constants
-	m_sim_params->poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));
-	m_sim_params->poly6_G = (-945.0f / (32.0f * M_PI * glm::pow(effective_radius, 9)));
-	m_sim_params->spiky = (15.0f / (M_PI * glm::pow(effective_radius, 6)));
-	m_sim_params->spiky_G = (-45.0f / (M_PI * glm::pow(effective_radius, 6)));
-	m_sim_params->viscosity_laplacian = (45.f / (M_PI * glm::pow(effective_radius, 6)));
-	m_sim_params->scorr_divisor = SPHKernel::Poly6_W(0.3f * effective_radius, effective_radius);
+	m_sim_params.poly6 = (315.0f / (64.0f * M_PI * glm::pow(effective_radius, 9)));
+	m_sim_params.poly6_G = (-945.0f / (32.0f * M_PI * glm::pow(effective_radius, 9)));
+	m_sim_params.spiky = (15.0f / (M_PI * glm::pow(effective_radius, 6)));
+	m_sim_params.spiky_G = (-45.0f / (M_PI * glm::pow(effective_radius, 6)));
+	m_sim_params.viscosity_laplacian = (45.f / (M_PI * glm::pow(effective_radius, 6)));
+	m_sim_params.scorr_divisor = SPHKernel::Poly6_W(0.3f * effective_radius, effective_radius);
 
-	m_sim_params->maximum_connection = m_particle_system->getMaximumConnection();
-	m_sim_params->k_refreezing = 0.1f; // PBD based stiffness (better with XPBD (haven't impelment yet))
-	m_sim_params->break_threshold = 1.05f;
+	m_sim_params.maximum_connection = m_particle_system->getMaximumConnection();
+	m_sim_params.k_refreezing = 0.75f; // PBD based stiffness (better with XPBD (haven't impelment yet))
+	m_sim_params.break_threshold = 1.05f;
 	m_particle_system->setParticleRadius(particle_radius);
 
 	set_sim_params(m_sim_params);
@@ -516,7 +519,7 @@ void Simulation::SetupSimParams()
 void Simulation::InitializeBoundaryParticles()
 {
 	const int thickness = 1;
-	const float diameter = 2.f * m_sim_params->particle_radius;
+	const float diameter = 2.f * m_sim_params.particle_radius;
 	// number of particles on x,y,z
 	int nx, ny, nz;
 	//size_t n_particles = 0;
@@ -692,7 +695,7 @@ void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, 
 	const float jitter_strength = 0.01f;
 	std::srand(time(NULL));
 	// diameter of particle
-	const float diameter = 2.f * m_sim_params->particle_radius;
+	const float diameter = 2.f * m_sim_params.particle_radius;
 	// number of particles on x,y,z
 	int nx, ny, nz;
 	// fluid cube extends
@@ -751,6 +754,132 @@ void Simulation::GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, 
 	}
 	//std::cout << "idx " << idx << std::endl;
 }
+
+void Simulation::GenerateParticleCube2(glm::vec3 half_extends, glm::vec3 origin, int opt, bool use_jitter = false)
+{
+	const float jitter_strength = 0.01f;
+	std::srand(time(NULL));
+	// diameter of particle
+	const float diameter = 2.f * m_sim_params.particle_radius;
+	// number of particles on x,y,z
+	int nx, ny, nz;
+	// fluid cube extends
+
+	nx = static_cast<int>(half_extends.x / diameter);
+	ny = static_cast<int>(half_extends.y / diameter);
+	nz = static_cast<int>(half_extends.z / diameter);
+
+	float x, y, z;
+
+	//const float diameter = 0.5f;
+
+	size_t n_particles = 8 * nx * ny * nz;
+	ParticleSet* particles = nullptr;
+
+	// 0: sph particles
+	// 1: dem particles
+	if (opt == 0)
+		particles = m_particle_system->AllocateSPHParticles(n_particles, m_sph_particle_mass);
+	else if (opt == 1)
+		particles = m_particle_system->AllocateDEMParticles(3 * n_particles, m_dem_particle_mass); // generate 3 cubes
+	else
+		return;
+
+	particles->m_color = (opt == 0) ? glm::vec3(0.7f, 0.7f, 1.f) : glm::vec3(0.85f, 0.85f, 0.85f);
+	std::cout << ((opt == 0) ? "SPH" : "DEM") << " particles: " << n_particles << std::endl;
+	// set positions
+	size_t idx = 0;
+	for (int i = -nx; i < nx; ++i)
+	{
+		for (int j = -ny; j < ny; ++j)
+		{
+			for (int k = -nz; k < nz; ++k)
+			{
+				x = origin.x + diameter * static_cast<float>(i);
+				y = origin.y + diameter * static_cast<float>(j);
+				z = origin.z + diameter * static_cast<float>(k);
+
+				if (use_jitter)
+				{
+					float x_jitter = jitter_strength * diameter * static_cast<float>(rand() % 3);
+					float y_jitter = jitter_strength * diameter * static_cast<float>(rand() % 3);
+					float z_jitter = jitter_strength * diameter * static_cast<float>(rand() % 3);
+					x += x_jitter;
+					y += y_jitter;
+					z += z_jitter;
+				}
+
+				glm::vec3 pos(x, y, z);
+				particles->m_positions[idx] = pos;
+				particles->m_new_positions[idx] = pos;
+				particles->m_predict_positions[idx] = pos;
+				idx++;
+			}
+		}
+	}
+
+	for (int i = -nx; i < nx; ++i)
+	{
+		for (int j = -ny; j < ny; ++j)
+		{
+			for (int k = -nz; k < nz; ++k)
+			{
+				x = origin.x + diameter * static_cast<float>(i) + 0.75f * half_extends.x;
+				y = origin.y + diameter * static_cast<float>(j) + 2.f * half_extends.y + 0.1f;
+				z = origin.z + diameter * static_cast<float>(k);
+
+				if (use_jitter)
+				{
+					float x_jitter = jitter_strength * diameter * static_cast<float>(rand() % 3);
+					float y_jitter = jitter_strength * diameter * static_cast<float>(rand() % 3);
+					float z_jitter = jitter_strength * diameter * static_cast<float>(rand() % 3);
+					x += x_jitter;
+					y += y_jitter;
+					z += z_jitter;
+				}
+
+				glm::vec3 pos(x, y, z);
+				particles->m_positions[idx] = pos;
+				particles->m_new_positions[idx] = pos;
+				particles->m_predict_positions[idx] = pos;
+				idx++;
+			}
+		}
+	}
+
+	for (int i = -nx; i < nx; ++i)
+	{
+		for (int j = -ny; j < ny; ++j)
+		{
+			for (int k = -nz; k < nz; ++k)
+			{
+				x = origin.x + diameter * static_cast<float>(i) - 0.75f * half_extends.x;
+				y = origin.y + diameter * static_cast<float>(j) + 4.f * half_extends.y + 0.2f;
+				z = origin.z + diameter * static_cast<float>(k);
+
+				if (use_jitter)
+				{
+					float x_jitter = jitter_strength * diameter * static_cast<float>(rand() % 3);
+					float y_jitter = jitter_strength * diameter * static_cast<float>(rand() % 3);
+					float z_jitter = jitter_strength * diameter * static_cast<float>(rand() % 3);
+					x += x_jitter;
+					y += y_jitter;
+					z += z_jitter;
+				}
+
+				glm::vec3 pos(x, y, z);
+				particles->m_positions[idx] = pos;
+				particles->m_new_positions[idx] = pos;
+				particles->m_predict_positions[idx] = pos;
+				idx++;
+			}
+		}
+	}
+
+
+	//std::cout << "idx " << idx << std::endl;
+}
+
 
 void Simulation::AppendParticleSets()
 {

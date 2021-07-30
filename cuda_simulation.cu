@@ -22,6 +22,10 @@
 
 namespace cg = cooperative_groups;
 
+
+// simulation parameters
+__constant__ SimParams params;
+
 /*SPH Kernels*/
 inline __device__ float sph_kernel_poly6(const float& distance, const float& effective_radius)
 {
@@ -343,6 +347,11 @@ void compute_boundary_volume_d(
 
 inline void compute_grid_size(uint n, uint block_size, uint& num_blocks, uint& num_threads)
 {
+	if (n == 0)
+	{
+		num_threads = 0, num_blocks = 0;
+		return;
+	}
 	num_threads = min(block_size, n);
 	num_blocks = (n % num_threads != 0) ? (n / num_threads + 1) : (n / num_threads);
 }
@@ -354,6 +363,10 @@ void calculate_hash(
 {
 	uint num_blocks, num_threads;
 	compute_grid_size(num_particles, MAX_THREAD_NUM, num_blocks, num_threads);
+
+	if (num_particles == 0)
+		return;
+
 	calcHashD << < num_blocks, num_threads >> > (
 		cell_data,
 		pos,
@@ -1399,9 +1412,10 @@ void allocate_array(void** devPtr, size_t size)
 	checkCudaErrors(cudaMalloc(devPtr, size));
 }
 
-void set_sim_params(SimParams* param_in)
+void set_sim_params(SimParams& param_in)
 {
-	checkCudaErrors(cudaMemcpyToSymbol(params, param_in, sizeof(SimParams)));
+	//params = param_in;
+	checkCudaErrors(cudaMemcpyToSymbol(params, &param_in, sizeof(SimParams)));
 }
 
 /* Integration for Position based Dynamics */

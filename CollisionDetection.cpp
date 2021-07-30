@@ -90,7 +90,7 @@ bool CollisionDetection::SphereAABBIntersection(SphereCollider* sphere, AABB* aa
 
 	glm::vec3 v = center - glm::vec3(x, y, z);
 
-	return (glm::dot(v, v) <= r);
+	return (glm::dot(v, v) <= r * r);
 }
 
 bool CollisionDetection::SphereOBBIntersection(SphereCollider* sphere, OBB* obb)

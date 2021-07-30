@@ -48,7 +48,7 @@ public:
 
 	// getters
 	inline float getGravity() { return m_world_desc.gravity; };
-	inline SimParams* getSimParams() { return m_sim_params; };
+	inline SimParams* getSimParams() { return &m_sim_params; };
 	inline bool  isPause() { return m_pause; };
 private:
 
@@ -58,6 +58,7 @@ private:
 	void InitializeBoundaryCudaData();
 	void InitializeTemperature(std::vector<float>& target, float temperature);
 	void GenerateParticleCube(glm::vec3 half_extends, glm::vec3 origin, int opt, bool use_jitter);
+	void GenerateParticleCube2(glm::vec3 half_extends, glm::vec3 origin, int opt, bool use_jitter);
 	void AppendParticleSets();
 
 	/**The below are CPU-only functions**/
@@ -85,7 +86,7 @@ private:
 	bool m_pause;
 
 	/*fluid data*/
-	SimParams* m_sim_params;
+	SimParams m_sim_params;
 	float m_rest_density;
 	float m_volume;
 	float m_dem_particle_mass;
