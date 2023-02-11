@@ -54,7 +54,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_scene_params.solid_start_time = 0.0f;
 	*/
 	
-	
+	/*
 	//plain snow drop
 	glm::vec3 fluid_half_extends = glm::vec3(0.1f, 0.1f, 0.1f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
@@ -66,9 +66,10 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 
 	m_scene_params.fluid_start_time = 10000.0f;
 	m_scene_params.solid_start_time = 0.0f;
-	
+	*/
 
-	/* water drop melt snow 
+	/*
+	// water drop melt snow 
 	glm::vec3 fluid_half_extends = glm::vec3(0.98f, 0.15f, 0.98f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
 	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.151f, 0.0f); // invisible in this scene
@@ -124,19 +125,19 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_scene_params.solid_start_time = 0.0f;
 	*/
 
-	/*
+	
 	// water drop
 	glm::vec3 fluid_half_extends = glm::vec3(0.05f, 1.5f, 0.05f);
 	glm::vec3 snow_half_extends = glm::vec3(1.f, 0.125f, 1.f);
 	glm::vec3 fluid_origin = glm::vec3(0.0f, 2.5f, 0.0f);
 	glm::vec3 snow_origin = glm::vec3(0.f, 0.26f, 0.0f);
 
-	const float sph_temperature = 50.f;
-	const float dem_temperature = -50.f;
+	const float sph_temperature = 500.f;
+	const float dem_temperature = -5.f;
 
 	m_scene_params.fluid_start_time = 0.0f;
 	m_scene_params.solid_start_time = 0.0f;
-	*/
+	
 
 	m_particle_system->setHottestTemperature(sph_temperature + 0.1f * glm::abs(sph_temperature));
 	m_particle_system->setCoolestTemperature(dem_temperature - 0.1f * glm::abs(dem_temperature));
@@ -147,7 +148,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	/*Set up parameters*/
 	SetupSimParams();
 	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, true);
-	GenerateParticleCube2(snow_half_extends, snow_origin, 1, false);
+	GenerateParticleCube(snow_half_extends, snow_origin, 1, false);
 
 	m_particle_system->setSPHInitialVelocity(glm::vec3(0.f,0,0));
 	m_particle_system->setDEMInitialVelocity(glm::vec3(0));
@@ -168,72 +169,6 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	
 	m_initialized = true;
 	
-}
-
-/*
- * Step simulation
- * @param[in] dt time step
- * @retval true  Successfully project constraints
- * @retval false Failed on constraint projection
- */
-bool Simulation::Step(float dt)
-{
-	if (!m_initialized)
-		return false;
-
-	if (m_pause)
-		return true;
-
-	const float effective_radius = 1.f;
-	std::chrono::steady_clock::time_point t1, t2, t3, t4, t5;
-
-	PredictPositions(dt);
-
-	t1 = std::chrono::high_resolution_clock::now();
-	CollisionDetection(dt);
-	HandleCollisionResponse();
-	GenerateCollisionConstraint();
-
-	t2 = std::chrono::high_resolution_clock::now();
-	FindNeighborParticles(effective_radius);
-
-	t3 = std::chrono::high_resolution_clock::now();
-	
-	if (m_first_frame)
-	{
-		ComputeRestDensity();
-		std::cout << "Rest density: " << m_rest_density << std::endl;
-	}
-	
-	
-	//m_rest_density = 10.f / 12.f;
-
-	for (uint32_t i = 0; i < m_solver->getSolverIteration(); ++i)
-	{		
-		ComputeDensity(effective_radius);
-		ComputeLambdas(effective_radius);
-		ComputeSPHParticlesCorrection(effective_radius, dt);
-		UpdatePredictPosition();
-	}
-	t4 = std::chrono::high_resolution_clock::now();
-	
- 	if (!ProjectConstraints(dt))
-		return false;
-
-	ApplySolverResults(dt);
-
-	{
-		ImGui::Begin("Performance");
-		ImGui::Text("Collision:\t %.5lf (ms)", (t2 - t1).count() / 1000000.0);
-		ImGui::Text("Searching:\t %.5lf (ms)", (t3 - t2).count() / 1000000.0);
-		ImGui::Text("Correction:\t%.5lf (ms)", (t4 - t3).count() / 1000000.0);
-		ImGui::Text("GL update:\t%.5lf (ms)", m_particle_system->getUpdateTime());
-		ImGui::End();
-	}
-
-	//m_pause = true;
-
-	return true;
 }
 
 bool Simulation::StepCUDA(float dt)
@@ -384,35 +319,6 @@ void Simulation::SetSolverIteration(uint32_t iter_count)
 	std::cout << "Iterations: " << iter_count << std::endl;
 	m_solver->setSolverIteration(iter_count);
 	m_iterations = iter_count;
-}
-
-void Simulation::ComputeRestDensity()
-{
-	const float effective_radius = 1.f;
-	ParticleSet* const particles = m_particle_system->getSPHParticles();
-
-	m_rest_density = 0;
-	
-	//#pragma omp parallel default(shared) num_threads(8)
-	{
-		//#pragma omp for schedule(dynamic)
-		for (int i = 0; i < particles->m_size; ++i)
-		{
-			auto neighbors = m_neighbor_searcher->FetchNeighbors(static_cast<size_t>(i));
-			particles->m_density[i] = particles->m_mass[i] * SPHKernel::Poly6_W(0, effective_radius);
-
-
-			for (int j = 0; j < neighbors.size(); ++j)
-			{
-				float distance = glm::distance(particles->m_positions[i], particles->m_positions[neighbors[j]]);
-				particles->m_density[i] += particles->m_mass[neighbors[j]] * SPHKernel::Poly6_W(distance, effective_radius);
-			}
-			m_rest_density += particles->m_density[i];
-		}
-	}
-
-	m_rest_density /= static_cast<float>(particles->m_size);
-	m_first_frame = false;
 }
 
 void Simulation::Pause()
@@ -891,220 +797,4 @@ void Simulation::AppendParticleSets()
 
 	sph_particles->AppendExtraMemory(dem_particles);
 	dem_particles->AppendExtraMemory(sph_particles);
-}
-
-
-void Simulation::PredictPositions(float dt)
-{
-	/*
-	 * Update position and velocity
-	 * 1. forall vertices i do v_i = v_i + dt * w_i * f_{ext}
-	 * 2. damp velocities 	
-	 */
-	ParticleSet* particles = m_particle_system->getSPHParticles();
-
-#pragma omp parallel default(shared) num_threads(8)
-	{
-		#pragma omp for schedule(static)
-		for (int i = 0; i < particles->m_size; ++i)
-		{
-			particles->m_force[i] = particles->m_mass[i] * glm::vec3(0, m_world_desc.gravity, 0);
-			particles->m_velocity[i] = particles->m_velocity[i] + dt * particles->m_massInv[i] * particles->m_force[i];
-			particles->m_predict_positions[i] = particles->m_positions[i] + dt * particles->m_velocity[i];
-			particles->m_new_positions[i] = particles->m_predict_positions[i];
-		}
-	}
-
-}
-
-void Simulation::FindNeighborParticles(float effective_radius)
-{
-	//m_neighbor_searcher->NaiveSearch(effective_radius);
-	m_neighbor_searcher->SpatialSearch(effective_radius);
-}
-
-void Simulation::ComputeDensity(float effective_radius)
-{
-	/*
-	{
-		const auto& neighbors = m_neighbor_searcher->FetchNeighbors(0);
-		ImGui::Begin("Neighbor test");
-		ImGui::Text("Object Array Size: %u", neighbors.size());
-		ImGui::End();
-	}
-	*/
-	ParticleSet* const particles = m_particle_system->getSPHParticles();
-
-	#pragma omp parallel default(shared) num_threads(8)
-	{
-		#pragma omp for schedule(dynamic)
-		for (int i = 0; i < particles->m_size; ++i)
-		{
-			auto neighbors = m_neighbor_searcher->FetchNeighbors(static_cast<size_t>(i));
-			particles->m_density[i] = particles->m_mass[i] * SPHKernel::Poly6_W(0, effective_radius);
-
-
-			for (int j = 0; j < neighbors.size(); ++j)
-			{
-				float distance = glm::distance(particles->m_predict_positions[i], particles->m_predict_positions[neighbors[j]]);
-				
-				float res = SPHKernel::Poly6_W(distance, effective_radius);
-				particles->m_density[i] += particles->m_mass[neighbors[j]] * res;
-			}
-			particles->m_C[i] = particles->m_density[i] / m_rest_density - 1.f;
-			std::cout << "C: " << particles->m_C[i] << std::endl;
-		}
-	}
-
-}
-
-void Simulation::ComputeLambdas(float effective_radius)
-{
-	const float epsilon = 1.0e-6f;
-	/* Compute density constraints */
-	ParticleSet* const particles = m_particle_system->getSPHParticles();
-
-	#pragma omp parallel default(shared) num_threads(8)
-	{
-		#pragma omp for schedule(dynamic)
-		for (int i = 0; i < particles->m_size; ++i)
-		{
-			auto neighbors = m_neighbor_searcher->FetchNeighbors(static_cast<size_t>(i));
-
-			// Reset Lagragian multiplier
-			particles->m_lambda[i] = -particles->m_C[i];
-			glm::vec3 gradientC_i = (1.f / m_rest_density) * SPHKernel::Poly6_W_Gradient(glm::vec3(0), 0, effective_radius);
-			float gradientC_sum = glm::dot(gradientC_i, gradientC_i);
-
-			for (int j = 0; j < neighbors.size(); ++j)
-			{
-				glm::vec3 diff = particles->m_predict_positions[i] - particles->m_predict_positions[neighbors[j]];
-				float distance = glm::distance(particles->m_predict_positions[i], particles->m_predict_positions[neighbors[j]]);
-
-				glm::vec3 gradientC_j = (1.f / m_rest_density) * SPHKernel::Poly6_W_Gradient(diff, distance, effective_radius);
-
-				float dot_value = glm::dot(gradientC_j, gradientC_j);
-
-				//gradientC_i += gradientC_j;
-				gradientC_sum += dot_value;
-			}
-			std::cout << "gradientC_sum: " << gradientC_sum << std::endl;
-			//float dot_value = glm::dot(gradientC_i, gradientC_i);
-			//gradientC_sum += dot_value;
-			particles->m_lambda[i] /= gradientC_sum + epsilon;
-		}
-	}
-
-}
-
-void Simulation::ComputeSPHParticlesCorrection(float effective_radius, float dt)
-{
-	ParticleSet* const particles = m_particle_system->getSPHParticles();
-
-	#pragma omp parallel default(shared) num_threads(8)
-	{
-		#pragma omp for schedule(dynamic)
-		for (int i = 0; i < particles->m_size; ++i)
-		{
-			auto neighbors = m_neighbor_searcher->FetchNeighbors(static_cast<size_t>(i));
-
-			for (int j = 0; j < neighbors.size(); ++j)
-			{
-				glm::vec3 diff = particles->m_predict_positions[i] - particles->m_predict_positions[neighbors[j]];
-				float distance = glm::distance(particles->m_predict_positions[i], particles->m_predict_positions[neighbors[j]]);
-				
-				// Artificial pressure
-				double scorr = -0.1;
-				double x = SPHKernel::Poly6_W(distance, effective_radius) / 
-					SPHKernel::Poly6_W(0.3f * effective_radius, effective_radius);
-				x = glm::pow(x, 4);
-				scorr = scorr * x * dt;
-
-				glm::vec3 result = (1.f / m_rest_density) *
-					(particles->m_lambda[i] + particles->m_lambda[neighbors[j]] + static_cast<float>(scorr)) *
-					SPHKernel::Poly6_W_Gradient(diff, distance, effective_radius);
-
-				particles->m_new_positions[i] += result;
-			}
-		}
-	}
-}
-
-void Simulation::UpdatePredictPosition()
-{
-	ParticleSet* const particles = m_particle_system->getSPHParticles();
-	for (size_t i = 0; i < particles->m_size; ++i)
-	{
-		particles->m_predict_positions[i] = particles->m_new_positions[i];
-	}
-}
-
-void Simulation::CollisionDetection(float dt)
-{	
-	// Clean previous CD result
-	for (auto vec : m_collision_table)
-	{
-		vec.clear();
-	}
-
-	ParticleSet* const particles = m_particle_system->getSPHParticles();
-	for (size_t i = 0; i < particles->m_size; ++i)
-	{
-		for (size_t j = 0; j < m_colliders.size(); ++j)
-		{
-			if (particles->TestCollision(i, m_colliders[j]))
-				particles->OnCollision(i, m_colliders[j], dt);
-		}
-	}
-
-	// TODO: Change to m_rigidbodies[i], m_rigidbodies[j]
-	for (size_t i = 0; i < m_colliders.size(); ++i)
-	{
-		for (size_t j = i+1; j < m_colliders.size(); ++j)
-		{
-			/* Record result if there's contact between two objects */
-			if (m_colliders[i]->TestCollision(m_colliders[j]))
-				m_collision_table[i].push_back(m_colliders[j]);
-		}
-	}
-}
-
-/*
- * This function handles collision response for specific collision pairs.
- * (Particle v.s. Static plane),  (Particle v.s. Static AABB), (Particle v.s Static OBB)
- */
-void Simulation::HandleCollisionResponse()
-{
-}
-
-/*
- * In jelly simulation the only collision is particle hitting the plane or other static BBs.
- * 
-*/
-void Simulation::GenerateCollisionConstraint()
-{
-	/* 
-	for(pairs : collision_pairs)
-	{
-		// Generate collision constraint
-	}
-	*/
-}
-
-bool Simulation::ProjectConstraints(const float &dt)
-{
-	m_solver->SolveConstraints(dt, m_static_constraints, m_collision_constraints);
-
-	return true;
-}
-
-void Simulation::AddCollisionConstraint(Constraint* constraint)
-{
-	m_collision_constraints.push_back(constraint);
-}
-
-void Simulation::ApplySolverResults(float dt)
-{
-	m_particle_system->getSPHParticles()->Update(dt);
-	m_particle_system->Update();
 }

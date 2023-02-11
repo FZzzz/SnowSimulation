@@ -1826,8 +1826,9 @@ void compute_dem_distance_correction(
 
 	corr *= dem_data.m_d_contrib[original_index];
 
-	if (isnan(corr.x))
-		printf("1814 nan\n");
+	if (isnan(corr.x) || isnan(corr.y) || isnan(corr.z))
+		corr = make_float3(0, 0, 0);
+		//printf("1814 nan\n");
 
 	dem_data.m_d_correction[original_index] += corr;
 }
@@ -2050,8 +2051,9 @@ void compute_friction_correction(
 	}
 
 
-	if (isnan(corr.x))
-		printf("2038 nan\n");
+	if (isnan(corr.x) || isnan(corr.y) || isnan(corr.z))
+		corr = make_float3(0, 0, 0);
+		//printf("2038 nan\n");
 
 	correction[original_index] = corr;
 }
@@ -2100,8 +2102,9 @@ void compute_sph_dem_distance_correction(
 	corr *= (1.f - sph_data.m_d_contrib[original_index]);
 
 
-	if (isnan(corr.x))
-		printf("2088 nan\n");
+	if (isnan(corr.x) || isnan(corr.y) || isnan(corr.z))
+		corr = make_float3(0, 0, 0);
+		//printf("2088 nan\n");
 
 	sph_data.m_d_correction[original_index] += params.k_stretch * corr;
 }
@@ -2151,8 +2154,9 @@ void compute_dem_sph_distance_correction(
 	corr *= params.k_stretch * dem_data.m_d_contrib[original_index];
 
 
-	if (isnan(corr.x))
-		printf("2136 nan\n");
+	if (isnan(corr.x) || isnan(corr.y) || isnan(corr.z))
+		corr = make_float3(0, 0, 0);
+
 
 	dem_data.m_d_correction[original_index] += corr;
 }
@@ -2206,8 +2210,8 @@ void compute_sph_sph_distance_correction(
 	}
 	corr *= (1.f - contrib[original_index]);
 
-	if (isnan(corr.x))
-		printf("2194 nan\n");
+	if (isnan(corr.x) || isnan(corr.y) || isnan(corr.z))
+		corr = make_float3(0, 0, 0);
 
 	correction[original_index] += corr;
 }
@@ -3173,8 +3177,8 @@ void compute_pbf_sph_correction(
 	corr *= sph_data.m_d_contrib[original_index];
 
 
-	if (isnan(corr.x))
-		printf("3161 nan\n");
+	if (isnan(corr.x) || isnan(corr.y) || isnan(corr.z))
+		corr = make_float3(0, 0, 0);
 
 	sph_correction[original_index] += corr;
 }
@@ -3237,8 +3241,8 @@ void compute_pbf_new_dem_correction(
 		}
 	}
 
-	if (isnan(corr.x))
-		printf("3225 nan\n");
+	if (isnan(corr.x) || isnan(corr.y) || isnan(corr.z))
+		corr = make_float3(0, 0, 0);
 
 	//dem-dem
 	for (int z = -1; z <= 1; z++)
@@ -3262,8 +3266,8 @@ void compute_pbf_new_dem_correction(
 		}
 	}
 
-	if (isnan(corr.x))
-		printf("3247 nan\n");
+	if (isnan(corr.x) || isnan(corr.y) || isnan(corr.z))
+		corr = make_float3(0, 0, 0);
 
 	// dem-boundary
 	for (int z = -1; z <= 1; z++)
@@ -3286,15 +3290,15 @@ void compute_pbf_new_dem_correction(
 		}
 	}
 
-	if (isnan(corr.x))
-		printf("3270 nan\n");
+	if (isnan(corr.x) || isnan(corr.y) || isnan(corr.z))
+		corr = make_float3(0, 0, 0);
 
 	corr = (1.f / params.rest_density) * corr;
 	corr *= (1.f - dem_data.m_d_contrib[original_index]);
 
 
-	if (isnan(corr.x))
-		printf("3274 nan\n");
+	if (isnan(corr.x) || isnan(corr.y) || isnan(corr.z))
+		corr = make_float3(0, 0, 0);
 
 	dem_data.m_d_correction[original_index] += corr;
 }
@@ -4718,15 +4722,15 @@ float3 compute_interlink_correction(ParticleDeviceData& data, volatile uint inde
 		return make_float3(0, 0, 0);
 	}
 
-	if (isnan(result.x))
+	if (isnan(result.x) || isnan(result.y) || isnan(result.z))
 	{
-		printf("NaN index0:%u index1:%u w0:%f w1:%f pos0:(%f, %f, %f) pos1:(%f, %f, %f) trackId0:%u trackId1:%u\n", index0, index1, w0, w1, pos0.x, pos0.y, pos0.z, pos1.x, pos1.y, pos1.z, data.m_d_trackId[index0], data.m_d_trackId[index1]);
+		//printf("NaN index0:%u index1:%u w0:%f w1:%f pos0:(%f, %f, %f) pos1:(%f, %f, %f) trackId0:%u trackId1:%u\n", index0, index1, w0, w1, pos0.x, pos0.y, pos0.z, pos1.x, pos1.y, pos1.z, data.m_d_trackId[index0], data.m_d_trackId[index1]);
 		return make_float3(0, 0, 0);
 	}
 
-	if (isinf(result.x))
+	if (isinf(result.x) || isinf(result.y) || isinf(result.z))
 	{
-		printf("Inf index0:%u index1:%u w0:%f w1:%f pos0:(%f, %f, %f) pos1:(%f, %f, %f) trackId0:%u trackId1:%u\n", index0, index1, w0, w1, pos0.x, pos0.y, pos0.z, pos1.x, pos1.y, pos1.z, data.m_d_trackId[index0], data.m_d_trackId[index1]);
+		//printf("Inf index0:%u index1:%u w0:%f w1:%f pos0:(%f, %f, %f) pos1:(%f, %f, %f) trackId0:%u trackId1:%u\n", index0, index1, w0, w1, pos0.x, pos0.y, pos0.z, pos1.x, pos1.y, pos1.z, data.m_d_trackId[index0], data.m_d_trackId[index1]);
 		return make_float3(0, 0, 0);
 	}
 
@@ -4754,8 +4758,8 @@ void solve_snow_interlink_constraint_d(ParticleDeviceData data, uint num_particl
 			corr += compute_interlink_correction(data, index, index1, data.m_d_connect_length[i], num_particles);
 	}
 
-	if (isnan(corr.x))
-		printf("4736 nan\n");
+	if (isnan(corr.x) || isnan(corr.y) || isnan(corr.z))
+		corr = make_float3(0, 0, 0);
 	// write back this correction to data
 	data.m_d_correction[index] += corr;
 }

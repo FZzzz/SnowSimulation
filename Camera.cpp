@@ -44,15 +44,6 @@ Camera::~Camera()
 
 void Camera::Update()
 {
-	/* 
-	//Recompute front-right-up (Bug :<)
-	m_front = glm::normalize(m_target_position - m_position);
-
-	 glm::mat4 vec_rot = glm::toMat4(RotateBetweenVectors(m_front, glm::vec3(0, 0, -1)));
-
-	m_right = glm::normalize(glm::vec3(vec_rot * glm::vec4(1, 0, 0, 1)));
-	m_up = glm::normalize(glm::cross(m_right, m_front));
-	*/
 	m_front = m_target_position - m_position;
 
 	m_lookAt = glm::lookAt(m_position, m_target_position, glm::vec3(0,1,0));
@@ -75,28 +66,6 @@ void Camera::Update()
 			glm::value_ptr(m_lookAt));
 		glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	}
-	/*
-	{
-		ImGui::Begin("Camera");
-		ImGui::Text("Front:  %f, %f, %f", m_front.x, m_front.y, m_front.z);
-		ImGui::Text("Right:  %f, %f, %f", m_right.x, m_right.y, m_right.z);
-		ImGui::Text("Up:     %f, %f, %f", m_up.x, m_up.y, m_up.z);
-		ImGui::End();
-	}
-	*/
-
-	/*
-	if (!lock_on_mode)
-		return;
-	position = lookAtObj->m_mesh->m_tranlation + glm::vec3(0, 10, -5);
-
-	const glm::vec3 up = glm::vec3(0, 1, 0);
-	const glm::vec3 front = lookAtObj->m_mesh->m_tranlation - position;
-	const glm::vec3 right = glm::normalize(glm::cross(up , front));
-	const glm::vec3 camUp = glm::cross(front, right);
-
-	lookAt = glm::lookAt(position , position + front , camUp);
-	*/
 }
 
 void Camera::Zoom(float fov_change)

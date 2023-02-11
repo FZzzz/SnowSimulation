@@ -61,25 +61,6 @@ private:
 	void GenerateParticleCube2(glm::vec3 half_extends, glm::vec3 origin, int opt, bool use_jitter);
 	void AppendParticleSets();
 
-	/**The below are CPU-only functions**/
-	void PredictPositions(float dt);
-	void FindNeighborParticles(float effective_radius);
-	
-	void ComputeRestDensity();
-	void ComputeDensity(float effective_radius);
-	void ComputeLambdas(float effective_radius);
-	void ComputeSPHParticlesCorrection(float effective_radius, float dt);
-	void UpdatePredictPosition();
-	
-	void CollisionDetection(float dt);
-	void HandleCollisionResponse();
-	void GenerateCollisionConstraint();
-	
-	bool ProjectConstraints(const float &dt);
-	
-	void AddCollisionConstraint(Constraint* constraint);
-	void ApplySolverResults(float dt);
-
 	SimWorldDesc m_world_desc;
 	bool m_initialized;
 	bool m_first_frame;

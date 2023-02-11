@@ -21,7 +21,7 @@
 class GLFWApp
 {
 public:
-	GLFWApp();
+	
 	~GLFWApp();
 	
 	bool Initialize(int width , int height , const std::string &title);
@@ -59,6 +59,8 @@ public:
 	
 
 private:
+
+	GLFWApp();
 	
 	void Render();
 	void Update();
