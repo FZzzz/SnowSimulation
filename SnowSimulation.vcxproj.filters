@@ -48,9 +48,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="GLFWApp.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -120,9 +117,6 @@
     <ClCompile Include="Shader.cpp">
       <Filter>Source Files\Engine\Core</Filter>
     </ClCompile>
-    <ClCompile Include="Simulation.cpp">
-      <Filter>Source Files\Engine\Physics</Filter>
-    </ClCompile>
     <ClCompile Include="Transform.cpp">
       <Filter>Source Files\Engine\Core</Filter>
     </ClCompile>
@@ -140,6 +134,9 @@
     </ClCompile>
     <ClCompile Include="Rigidbody.cpp">
       <Filter>Source Files\Engine\Physics</Filter>
+    </ClCompile>
+    <ClCompile Include="GLFWApp.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -230,9 +227,6 @@
     <ClInclude Include="util.h">
       <Filter>Header Files\Engine\Core</Filter>
     </ClInclude>
-    <ClInclude Include="cuda_simulation.cuh">
-      <Filter>CUDA Files</Filter>
-    </ClInclude>
     <ClInclude Include="imgui\imconfig.h">
       <Filter>Header Files\Engine\imgui</Filter>
     </ClInclude>
@@ -257,15 +251,14 @@
     <ClInclude Include="SimParams.h">
       <Filter>Header Files\Engine\Physics</Filter>
     </ClInclude>
-    <ClInclude Include="cuda_tool.cuh">
-      <Filter>CUDA Files</Filter>
-    </ClInclude>
     <ClInclude Include="RenderTargetTexture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SceneParams.h">
       <Filter>Header Files\Engine\Physics</Filter>
     </ClInclude>
+    <ClInclude Include="cuda_simulation.cuh" />
+    <ClInclude Include="cuda_tool.cuh" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="cuda_simulation.cu">
@@ -273,6 +266,9 @@
     </CudaCompile>
     <CudaCompile Include="cuda_tool.cu">
       <Filter>CUDA Files</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Simulation.cpp">
+      <Filter>Source Files\Engine\Physics</Filter>
     </CudaCompile>
   </ItemGroup>
 </Project>

@@ -30,9 +30,9 @@ std::shared_ptr<Mesh> AssetImporter::LoadMesh(
 		Load Mesh
 	*/
 	status = IMPORT_STATUS::IMPORT_FAILED;
-	if (path.find(".obj") == string::npos)
+	if (path.find(".obj") == std::string::npos)
 	{
-		cout << "Only Support (.obj) Files" << endl;
+		std::cout << "Only Support (.obj) Files" << std::endl;
 		return nullptr;
 	}
 
@@ -278,9 +278,9 @@ std::shared_ptr<AnimCharacter> AssetImporter::LoadBVHAssimp(
 {
 	std::shared_ptr<AnimCharacter> anim_character = nullptr;
 	status = IMPORT_STATUS::IMPORT_FAILED;
-	if (path.find(".bvh") == string::npos)
+	if (path.find(".bvh") == std::string::npos)
 	{
-		cout << "Only Support (.bvh) Files" << endl;
+		std::cout << "Only Support (.bvh) Files" << std::endl;
 		return nullptr;
 	}
 	

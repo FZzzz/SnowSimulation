@@ -21,6 +21,17 @@ struct SimWorldDesc
 	float global_velocity_damping;
 };
 
+struct InitialParticleState
+{
+	glm::vec3 fluid_half_extents;
+	glm::vec3 solid_half_extents;
+	glm::vec3 fluid_origin;
+	glm::vec3 solid_origin;
+	float fluid_temperature;
+	float solid_temperature;
+	bool fluid_jitter;
+};
+
 class Simulation
 {
 
@@ -45,6 +56,7 @@ public:
 	// setters
 	void setGravity(float gravity);
 	void setClipLength(int length);
+	InitialParticleState& getInitialParticleState() { return m_initial_particle_state; }
 
 	// getters
 	inline float getGravity() { return m_world_desc.gravity; };
@@ -53,6 +65,8 @@ public:
 private:
 
 	void SetupSimParams();
+	void ResetInitialParticles();
+	void DrawInitialParticleControls();
 
 	void InitializeBoundaryParticles();
 	void InitializeBoundaryCudaData();
@@ -109,6 +123,7 @@ private:
 	int m_clip_length; // clip length of how many frames at the each run
 	
 	SceneParams m_scene_params;
+	InitialParticleState m_initial_particle_state;
 	
 	float m_dt;
 

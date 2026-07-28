@@ -1,5 +1,7 @@
+#pragma once
 #ifndef _GLFWAPP_H
 #define _GLFWAPP_H
+#endif
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -21,7 +23,7 @@
 class GLFWApp
 {
 public:
-	GLFWApp();
+	
 	~GLFWApp();
 	
 	bool Initialize(int width , int height , const std::string &title);
@@ -59,6 +61,8 @@ public:
 	
 
 private:
+
+	GLFWApp();
 	
 	void Render();
 	void Update();
@@ -99,5 +103,3 @@ private:
 
 	bool m_app_status;
 };
-
-#endif

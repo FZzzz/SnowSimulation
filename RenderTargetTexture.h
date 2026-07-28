@@ -1,5 +1,7 @@
+#pragma once
 #ifndef _RENDER_TARGET_TEXTURE_H_
 #define _RENDER_TARGET_TEXTURE_H_
+#endif
 
 #include <GL/glew.h>
 
@@ -66,5 +68,3 @@ public:
 	GLuint m_rbo; // render buffer object
 
 };
-
-#endif

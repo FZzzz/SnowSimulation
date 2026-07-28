@@ -1,22 +1,29 @@
-#include <cuda_runtime.h>
+#include <chrono>
 #include <cstdlib>
+#include <device_atomic_functions.h>
 #include <helper_cuda.h>
 #include <helper_functions.h>
-#include <device_atomic_functions.h>
 #include <helper_math.h>
-#include <stdio.h>
-#include <thrust/device_vector.h>
-#include <thrust/host_vector.h>
+#include <iostream>
+
+// thrust
+#include <thrust/count.h>
 #include <thrust/device_ptr.h>
+#include <thrust/device_vector.h>
 #include <thrust/for_each.h>
+#include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/sort.h>
-#include <thrust/count.h>
-#include <cooperative_groups.h>
+
+// local
 #include "cuda_simulation.cuh"
 #include "cuda_tool.cuh"
-#include <chrono>
-#include "imgui/imgui.h"
+
+
+// cuda 
+#include <cuda_runtime.h>
+#include <cooperative_groups.h>
+
 
 #define NUM_CELLS 262144
 
@@ -402,6 +409,9 @@ void sort_and_reorder(
 	uint num_cells=NUM_CELLS
 ) 
 {
+	if (num_particles == 0)
+		return;
+
 	calculate_hash(
 		cell_data,
 		predict_pos,
@@ -415,12 +425,15 @@ void sort_and_reorder(
 		cell_data,
 		predict_pos,
 		num_particles,
-		num_particles
+		num_cells
 	);
 }
 
 void compute_boundary_volume(CellData data, float* mass, float* volume, uint numParticles)
 {
+	if (numParticles == 0)
+		return;
+
 	uint num_threads, num_blocks;
 	compute_grid_size(numParticles, MAX_THREAD_NUM, num_blocks, num_threads);
 
@@ -452,6 +465,7 @@ void integrate_pbd_d(
 	uint numParticles)
 {
 	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+	if (index >= numParticles) return;
 	
 	float3 t_vel = vel[index] + dt * params.gravity;
 	t_vel = t_vel * params.global_damping;
@@ -471,6 +485,7 @@ void integrate_pbd_cd_d(
 	uint numParticles)
 {
 	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+	if (index >= numParticles) return;
 
 	float3* pos = data.m_d_positions;
 	float3* vel = data.m_d_velocity;
@@ -1019,7 +1034,7 @@ float3 pbf_correction_coupling(
 					float x = sph_kernel_poly6(dist, params.effective_radius) / params.scorr_divisor;
 						//sph_kernel_poly6(0.3f * params.effective_radius, params.effective_radius);
 					x = pow(x, 4);
-					float scorr = -params.scorr_coeff * scorr * x * dt * dt;
+					float scorr = -params.scorr_coeff * x * dt * dt;
 
 					float3 res = (lambda_i + lambda_j + scorr) * gradient;
 
@@ -1414,7 +1429,6 @@ void allocate_array(void** devPtr, size_t size)
 
 void set_sim_params(SimParams& param_in)
 {
-	//params = param_in;
 	checkCudaErrors(cudaMemcpyToSymbol(params, &param_in, sizeof(SimParams)));
 }
 
@@ -1426,6 +1440,9 @@ void integrate_pbd(
 	bool cd_on = false
 )
 {
+	if (numParticles == 0)
+		return;
+
 	uint num_threads, num_blocks;
 	compute_grid_size(numParticles, MAX_THREAD_NUM, num_blocks, num_threads);
 	if (cd_on)
@@ -3197,7 +3214,7 @@ void compute_pbf_new_dem_correction(
 
 	if (index >= numParticles) return;
 
-	uint original_index = sph_cell_data.grid_index[index];
+	uint original_index = dem_cell_data.grid_index[index];
 
 	//cache data
 	float* sph_lambda = sph_data.m_d_lambda;
@@ -3500,6 +3517,7 @@ float3 xsph_viscosity_cell_coupling(
 __global__ 
 void xsph_sph_viscosity(
 	float3* sph_vel,
+	float3* sph_viscosity,
 	float*  sph_mass,
 	float*  sph_density,
 	float3* dem_vel,
@@ -3517,7 +3535,6 @@ void xsph_sph_viscosity(
 
 	uint original_index = sph_cell_data.grid_index[index];
 
-	cg::thread_block cta = cg::this_thread_block();
 	// read particle data from sorted arrays
 	float3 pos = sph_cell_data.sorted_pos[index];
 	float3 v_i = sph_vel[original_index];
@@ -3570,15 +3587,14 @@ void xsph_sph_viscosity(
 	 
 	corr *= params.sph_viscosity;
 
-	cg::sync(cta);
-
-	sph_vel[original_index] += corr;
+	sph_viscosity[original_index] = corr;
 
 }
 
 __global__
 void xsph_dem_viscosity(
 	float3* dem_vel,
+	float3* dem_viscosity,
 	float* dem_mass,
 	float* dem_density,
 	float3* sph_vel,
@@ -3596,7 +3612,6 @@ void xsph_dem_viscosity(
 
 	uint original_index = dem_cell_data.grid_index[index];
 
-	cg::thread_block cta = cg::this_thread_block();
 	// read particle data from sorted arrays
 	float3 pos = dem_cell_data.sorted_pos[index];
 	float3 v_i = dem_vel[original_index];
@@ -3649,10 +3664,19 @@ void xsph_dem_viscosity(
 
 	corr *= params.dem_viscosity;
 
-	cg::sync(cta);
+	dem_viscosity[original_index] = corr;
 
-	dem_vel[original_index] += corr;
+}
 
+__global__
+void apply_viscosity(float3* velocity, const float3* viscosity, uint num_particles)
+{
+	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
+
+	if (index >= num_particles)
+		return;
+
+	velocity[index] += viscosity[index];
 }
 
 
@@ -3671,10 +3695,11 @@ void apply_XSPH_viscosity(
 	uint sph_num_threads, sph_num_blocks;
 	compute_grid_size(sph_num_particles, MAX_THREAD_NUM, sph_num_blocks, sph_num_threads);
 
-	if (b_step_sph)
+	if (b_step_sph && sph_num_particles != 0)
 	{
 		xsph_sph_viscosity << <sph_num_blocks, sph_num_threads >> > (
 			sph_particles->m_device_data.m_d_velocity,
+			sph_particles->m_device_data.m_d_force,
 			sph_particles->m_device_data.m_d_mass,
 			sph_particles->m_device_data.m_d_density,
 			dem_particles->m_device_data.m_d_velocity,
@@ -3685,14 +3710,22 @@ void apply_XSPH_viscosity(
 			sph_num_particles
 			);
 		getLastCudaError("Kernel execution failed : xsph_sph_viscosity");
+
+		apply_viscosity << <sph_num_blocks, sph_num_threads >> > (
+			sph_particles->m_device_data.m_d_velocity,
+			sph_particles->m_device_data.m_d_force,
+			sph_num_particles
+			);
+		getLastCudaError("Kernel execution failed : apply_viscosity");
 	}
 	
-	if (use_dem_viscosity && b_step_dem)
+	if (use_dem_viscosity && b_step_dem && dem_num_particles != 0)
 	{
 		uint dem_num_threads, dem_num_blocks;
 		compute_grid_size(dem_num_particles, MAX_THREAD_NUM, dem_num_blocks, dem_num_threads);
-		xsph_dem_viscosity << <sph_num_blocks, sph_num_threads >> > (
+		xsph_dem_viscosity << <dem_num_blocks, dem_num_threads >> > (
 			dem_particles->m_device_data.m_d_velocity,
+			dem_particles->m_device_data.m_d_force,
 			dem_particles->m_device_data.m_d_mass,
 			dem_particles->m_device_data.m_d_density,
 			sph_particles->m_device_data.m_d_velocity,
@@ -3703,6 +3736,13 @@ void apply_XSPH_viscosity(
 			dem_num_particles
 			);
 		getLastCudaError("Kernel execution failed : xsph_dem_viscosity");
+
+		apply_viscosity << <dem_num_blocks, dem_num_threads >> > (
+			dem_particles->m_device_data.m_d_velocity,
+			dem_particles->m_device_data.m_d_force,
+			dem_num_particles
+			);
+		getLastCudaError("Kernel execution failed : apply_viscosity");
 	}
 }
 
@@ -3735,7 +3775,7 @@ void counting_neighbors_d(
 			for (int x = -1; x <= 1; x++)
 			{
 				int3 neighbor_pos = gridPos + make_int3(x, y, z);
-				count += count_neighbor_cell(gridPos, index, pos, cell_data0, false);
+				count += count_neighbor_cell(neighbor_pos, index, pos, cell_data0, false);
 			}
 		}
 	}
@@ -3748,7 +3788,7 @@ void counting_neighbors_d(
 			for (int x = -1; x <= 1; x++)
 			{
 				int3 neighbor_pos = gridPos + make_int3(x, y, z);
-				count += count_neighbor_cell(gridPos, index, pos, cell_data1, true);
+				count += count_neighbor_cell(neighbor_pos, index, pos, cell_data1, true);
 			}
 		}
 	}
@@ -3812,7 +3852,8 @@ void transfer_heat_sph(
 	CellData sph_cell_data,
 	CellData dem_cell_data,
 	uint sph_num_particles,
-	float dt
+	float dt,
+	float heat_transfer_scale
 )
 {
 	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
@@ -3840,7 +3881,7 @@ void transfer_heat_sph(
 			for (int x = -1; x <= 1; x++)
 			{
 				int3 neighbor_pos = gridPos + make_int3(x, y, z);
-				dT += heat_transfer_cell(gridPos, index, pos, T_i, params.k_water, params.k_water, sph_data, sph_cell_data, false);
+				dT += heat_transfer_cell(neighbor_pos, index, pos, T_i, params.k_water, params.k_water, sph_data, sph_cell_data, false);
 			}
 		}
 	}
@@ -3853,7 +3894,7 @@ void transfer_heat_sph(
 			for (int x = -1; x <= 1; x++)
 			{
 				int3 neighbor_pos = gridPos + make_int3(x, y, z);
-				dT += heat_transfer_cell(gridPos, index, pos, T_i, params.k_water, params.k_snow, dem_data, dem_cell_data, true);
+				dT += heat_transfer_cell(neighbor_pos, index, pos, T_i, params.k_water, params.k_snow, dem_data, dem_cell_data, true);
 			}
 		}
 	}
@@ -3867,7 +3908,7 @@ void transfer_heat_sph(
 	}
 	*/
 
-	dT /= params.C_water * sph_data.m_d_density[original_index];
+	dT *= heat_transfer_scale / (params.C_water * sph_data.m_d_density[original_index]);
 
 	//write to new_T
 	sph_data.m_d_new_T[original_index] = T_i + dT * dt;
@@ -3880,7 +3921,8 @@ void transfer_heat_dem(
 	CellData sph_cell_data,
 	CellData dem_cell_data,
 	uint dem_num_particles,
-	float dt
+	float dt,
+	float heat_transfer_scale
 )
 {
 	uint index = __mul24(blockIdx.x, blockDim.x) + threadIdx.x;
@@ -3908,7 +3950,7 @@ void transfer_heat_dem(
 			for (int x = -1; x <= 1; x++)
 			{
 				int3 neighbor_pos = gridPos + make_int3(x, y, z);
-				dT += heat_transfer_cell(gridPos, index, pos, T_i, params.k_snow, params.k_snow, dem_data, dem_cell_data, false);
+				dT += heat_transfer_cell(neighbor_pos, index, pos, T_i, params.k_snow, params.k_snow, dem_data, dem_cell_data, false);
 			}
 		}
 	}
@@ -3921,12 +3963,12 @@ void transfer_heat_dem(
 			for (int x = -1; x <= 1; x++)
 			{
 				int3 neighbor_pos = gridPos + make_int3(x, y, z);
-				dT += heat_transfer_cell(gridPos, index, pos, T_i, params.k_snow, params.k_water, sph_data, sph_cell_data, true);
+				dT += heat_transfer_cell(neighbor_pos, index, pos, T_i, params.k_snow, params.k_water, sph_data, sph_cell_data, true);
 			}
 		}
 	}
 
-	dT /= params.C_snow * dem_data.m_d_density[original_index];
+	dT *= heat_transfer_scale / (params.C_snow * dem_data.m_d_density[original_index]);
 
 	//write to new_T
 	dem_data.m_d_new_T[original_index] = T_i + dT * dt;
@@ -3943,13 +3985,25 @@ void transfer_heat(
 	uint sph_num_blocks,
 	uint sph_num_threads,
 	uint dem_num_blocks,
-	uint dem_num_threads
+	uint dem_num_threads,
+	bool transfer_sph,
+	bool transfer_dem,
+	float heat_transfer_scale
 )
 {
 	// Be careful to R/W problem
 	// transfer heat between (sph-sph sph-dem), (dem-dem dem-sph)
-	transfer_heat_sph <<<sph_num_blocks, sph_num_threads>>>(sph_data, dem_data, sph_cell_data, dem_cell_data, sph_num_particles, dt);
-	transfer_heat_dem <<<dem_num_blocks, dem_num_threads>>>(sph_data, dem_data, sph_cell_data, dem_cell_data, dem_num_particles, dt);
+	if (transfer_sph && sph_num_particles != 0)
+	{
+		transfer_heat_sph <<<sph_num_blocks, sph_num_threads>>>(sph_data, dem_data, sph_cell_data, dem_cell_data, sph_num_particles, dt, heat_transfer_scale);
+		getLastCudaError("Kernel execution failed: transfer_heat_sph");
+	}
+
+	if (transfer_dem && dem_num_particles != 0)
+	{
+		transfer_heat_dem <<<dem_num_blocks, dem_num_threads>>>(sph_data, dem_data, sph_cell_data, dem_cell_data, dem_num_particles, dt, heat_transfer_scale);
+		getLastCudaError("Kernel execution failed: transfer_heat_dem");
+	}
 
 	// Cast to device pointer
 	thrust::device_ptr<float> sph_T_ptr = thrust::device_pointer_cast(sph_data.m_d_T);
@@ -3961,8 +4015,10 @@ void transfer_heat(
 	// Write back
 	//thrust::fill(sph_T_ptr, sph_T_ptr + sph_num_particles, 10.f);
 	//thrust::fill(dem_T_ptr, dem_T_ptr + dem_num_particles, -20.f);
-	thrust::copy(sph_new_T_ptr, sph_new_T_ptr + sph_num_particles, sph_T_ptr);
-	thrust::copy(dem_new_T_ptr, dem_new_T_ptr + dem_num_particles, dem_T_ptr);
+	if (transfer_sph)
+		thrust::copy(sph_new_T_ptr, sph_new_T_ptr + sph_num_particles, sph_T_ptr);
+	if (transfer_dem)
+		thrust::copy(dem_new_T_ptr, dem_new_T_ptr + dem_num_particles, dem_T_ptr);
 }
 
 
@@ -4787,6 +4843,9 @@ void adjust_connections_d(ParticleDeviceData data, uint num_particles)
 			//printf("Deleting for %u T:%f current_max: %u\n", index, T, current_max_connection);
 			// delete record on this index
 			uint index1 = atomicExch(&data.m_d_connect_record[i], UINT_MAX);
+			if (index1 == UINT_MAX)
+				continue;
+
 			data.m_d_connect_length[i] = 0.f;
 			atomicSub(&data.m_d_iter_end[index], 1u);
 
@@ -4877,7 +4936,8 @@ void snow_simulation(
 	bool use_interlink,
 	bool dynamic_max_connections,
 	bool cd_on,
-	float temperature_variation
+	float temperature_variation,
+	float heat_transfer_scale
 )
 {
 	bool b_step_sph = (scene_params.current_time >= scene_params.fluid_start_time);
@@ -4942,7 +5002,10 @@ void snow_simulation(
 			sph_num_blocks,
 			sph_num_threads,
 			dem_num_blocks,
-			dem_num_threads
+			dem_num_threads,
+			b_step_sph,
+			b_step_dem,
+			heat_transfer_scale
 		);
 
 		environmental_heat_transfer(

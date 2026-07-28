@@ -2,6 +2,13 @@
 #include "GLFWApp.h"
 #include <iostream>
 
+using std::cout;
+using std::endl;
+using std::exception;
+using std::ifstream;
+using std::string;
+using std::stringstream;
+
 Shader::Shader(std::string name) 
 	: m_vertex_shader(0), m_geometry_shader(0), m_fragment_shader(0), m_program(0), m_name(name)
 {

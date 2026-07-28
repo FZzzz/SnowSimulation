@@ -1,4 +1,11 @@
+#pragma once
+#ifndef	_CUDA_TOOL_H_
+#define _CUDA_TOOL_H_
+#endif
+
 #include "cuda_tool.cuh"
+#include <thrust/device_ptr.h>
+#include <thrust/fill.h>
 
 void cuda_tool_fill_uint(uint* d_arr, size_t start, size_t end, uint value)
 {

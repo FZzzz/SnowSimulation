@@ -10,8 +10,6 @@
 #include <map>
 #include <glm/common.hpp>
 
-using namespace std;
-
 enum ShaderEnum
 {
 	SHADER_MODE_FLAT,

@@ -165,12 +165,12 @@ void Particle::OnCollision(Collider* other, const float& dt)
 }
 
 ParticleSet::ParticleSet()
-	: m_size(0)
+	: m_size(0), m_full_size(0), m_device_data{}
 {
 }
 
 ParticleSet::ParticleSet(size_t n, float particle_mass)
-	: m_size(n), m_full_size(n)
+	: m_size(n), m_full_size(n), m_device_data{}
 {
 	//m_prev_positions.resize(n, glm::vec3(0,0,0));
 	m_positions.resize(n, glm::vec3(0, 0, 0));
@@ -396,9 +396,10 @@ void ParticleSet::ReleaseDeviceData()
 	if (m_device_data.m_d_connect_length != nullptr) cudaFree(m_device_data.m_d_connect_length);
 	if (m_device_data.m_d_iter_end != nullptr) cudaFree(m_device_data.m_d_iter_end);
 
-	if (m_device_data.m_d_new_end != nullptr) cudaFree(m_device_data.m_d_new_end);
-	
+	if (m_device_data.m_d_mass_scale != nullptr) cudaFree(m_device_data.m_d_mass_scale);
+	if (m_device_data.m_d_new_index != nullptr) cudaFree(m_device_data.m_d_new_index);
 
+	m_device_data = {};
 }
 
 void ParticleSet::AppendExtraMemory(ParticleSet* other)

@@ -2,6 +2,9 @@
 #define _RESOURCEMANAGER_H_
 
 #include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 #include "GameObject.h"
 #include "Mesh.h"
 #include "Camera.h"
@@ -31,7 +34,7 @@ public:
 	void RemoveObjectFromLast();
 	void ArrangeStaticObjects();
 	
-	std::shared_ptr<GameObject> FindObjByName(const string& name);
+	std::shared_ptr<GameObject> FindObjByName(const std::string& name);
 
 	void SetMainCamera(std::shared_ptr<Camera> camera);
 	void AddStaticObject(std::shared_ptr<GameObject> object);

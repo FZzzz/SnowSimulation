@@ -15,7 +15,10 @@
 NeighborSearch::NeighborSearch(std::shared_ptr<ParticleSystem> particle_system, uint3 grid_size):
     m_particle_system(particle_system), 
     m_grid_spacing(1.f),
-    m_grid_size(grid_size)
+    m_grid_size(grid_size),
+    m_d_sph_cell_data{},
+    m_d_dem_cell_data{},
+    m_d_boundary_cell_data{}
 {
     m_num_grid_cells = m_grid_size.x * m_grid_size.y * m_grid_size.z;
 }
@@ -117,6 +120,10 @@ void NeighborSearch::Release()
         cudaFree(m_d_boundary_cell_data.cell_end);
         cudaFree(m_d_boundary_cell_data.sorted_pos);
     }
+
+    m_d_sph_cell_data = {};
+    m_d_dem_cell_data = {};
+    m_d_boundary_cell_data = {};
 
 }
 

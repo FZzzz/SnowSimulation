@@ -1,5 +1,6 @@
 #ifndef _RIGIDBODY_H_
 #define _RIGIDBODY_H_
+#endif
 
 #include "common.h"
 #include "Collider.h"
@@ -48,4 +49,3 @@ private:
 
 };
 
-#endif

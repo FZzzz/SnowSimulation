@@ -51,6 +51,28 @@ struct ParticleDeviceData
 	uint*  m_d_trackId;
 };
 
+struct ParticleSetBase
+{
+	// method here
+
+	std::vector<glm::vec3> prevPositions;
+	std::vector<glm::vec3> currPositions;
+	std::vector<glm::vec3> newPositions;
+
+	std::vector<glm::vec3> velocities;
+	std::vector<glm::vec3> externalForces;
+
+	std::vector<float>	masses;
+	std::vector<float>	massInvs;
+};
+
+struct FluidPartcleSet : public ParticleSetBase
+{
+
+
+};
+
+
 class ParticleSet
 {
 public:
@@ -77,7 +99,7 @@ public:
 	//std::vector<glm::vec3>	m_prev_positions;
 	std::vector<glm::vec3>	m_positions;
 	std::vector<glm::vec3>	m_predict_positions;
-	std::vector<glm::vec3>	m_new_positions;
+	std::vector<glm::vec3>	m_new_positions; // why do we need this...?
 
 	std::vector<glm::vec3>	m_velocity;
 	std::vector<glm::vec3>	m_force;
@@ -85,16 +107,23 @@ public:
 	std::vector<float>		m_mass;
 	std::vector<float>		m_massInv;
 	std::vector<float>		m_density;
+
+	// position-based constraint parameters
 	std::vector<float>		m_C;
 	std::vector<float>		m_lambda;
+
+	// volume for volume constraint
 	std::vector<float>		m_volume;
 
 	std::vector<float>		m_temperature;
 
+
+	// render resources
 	glm::vec3				m_color;
 	
 	uint m_maximum_connection;
 
+	// TODO: no need to be here
 	ParticleDeviceData m_device_data;
 };
 

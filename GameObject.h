@@ -1,5 +1,7 @@
+#pragma once
 #ifndef _GAMEOBJECT_H_
 #define _GAMEOBJECT_H_
+#endif
 
 #include <vector>
 #include <memory>
@@ -65,5 +67,3 @@ private:
 	
 	
 };
-
-#endif

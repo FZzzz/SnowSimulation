@@ -9,10 +9,23 @@ ParticleSystem::ParticleSystem() :
 	m_sph_particles(nullptr),
 	m_dem_particles(nullptr),
 	m_boundary_particles(nullptr),
+	m_buffer_device_data(nullptr),
 	//m_particles(nullptr),
 	m_particle_radius(5.f),
 	m_hottest_temperature(10.f),
-	m_coolest_temperature(-10.f)
+	m_coolest_temperature(-10.f),
+	m_sph_vao(0),
+	m_sph_vbo{ 0, 0 },
+	m_sph_ebo(0),
+	m_dem_vao(0),
+	m_dem_vbo{ 0, 0 },
+	m_dem_ebo(0),
+	m_boundary_vao(0),
+	m_boundary_vbo(0),
+	m_boundary_ebo(0),
+	m_sph_cuda_vbo_resource{ nullptr, nullptr },
+	m_dem_cuda_vbo_resource{ nullptr, nullptr },
+	m_boundary_cuda_vbo_resource(nullptr)
 {
 }
 
@@ -64,24 +77,27 @@ void ParticleSystem::Release()
 	if (m_sph_particles != nullptr)
 	{
 		m_sph_particles->ReleaseDeviceData();
-		cudaGraphicsUnregisterResource(m_sph_cuda_vbo_resource[0]);
-		cudaGraphicsUnregisterResource(m_sph_cuda_vbo_resource[1]);
+		if (m_sph_cuda_vbo_resource[0] != nullptr) cudaGraphicsUnregisterResource(m_sph_cuda_vbo_resource[0]);
+		if (m_sph_cuda_vbo_resource[1] != nullptr) cudaGraphicsUnregisterResource(m_sph_cuda_vbo_resource[1]);
 		delete m_sph_particles;
+		m_sph_particles = nullptr;
 	}
 
 	if (m_dem_particles != nullptr)
 	{
 		m_dem_particles->ReleaseDeviceData();
-		cudaGraphicsUnregisterResource(m_dem_cuda_vbo_resource[0]);
-		cudaGraphicsUnregisterResource(m_dem_cuda_vbo_resource[1]);
+		if (m_dem_cuda_vbo_resource[0] != nullptr) cudaGraphicsUnregisterResource(m_dem_cuda_vbo_resource[0]);
+		if (m_dem_cuda_vbo_resource[1] != nullptr) cudaGraphicsUnregisterResource(m_dem_cuda_vbo_resource[1]);
 		delete m_dem_particles;
+		m_dem_particles = nullptr;
 	}
 
 	if (m_boundary_particles != nullptr)
 	{
 		m_boundary_particles->ReleaseDeviceData();
-		cudaGraphicsUnregisterResource(m_boundary_cuda_vbo_resource);
+		if (m_boundary_cuda_vbo_resource != nullptr) cudaGraphicsUnregisterResource(m_boundary_cuda_vbo_resource);
 		delete m_boundary_particles;
+		m_boundary_particles = nullptr;
 	}
 
 	if (m_buffer_device_data != nullptr)
@@ -106,9 +122,29 @@ void ParticleSystem::Release()
 		cudaFree(m_buffer_device_data->m_d_connect_record);
 		cudaFree(m_buffer_device_data->m_d_iter_end);
 		cudaFree(m_buffer_device_data->m_d_connect_length);
+		cudaFree(m_buffer_device_data->m_d_mass_scale);
+		cudaFree(m_buffer_device_data->m_d_new_index);
 
 		delete m_buffer_device_data;
+		m_buffer_device_data = nullptr;
 	}
+
+	glDeleteBuffers(2, m_sph_vbo);
+	glDeleteBuffers(1, &m_sph_ebo);
+	glDeleteVertexArrays(1, &m_sph_vao);
+	glDeleteBuffers(2, m_dem_vbo);
+	glDeleteBuffers(1, &m_dem_ebo);
+	glDeleteVertexArrays(1, &m_dem_vao);
+	glDeleteBuffers(1, &m_boundary_vbo);
+	glDeleteBuffers(1, &m_boundary_ebo);
+	glDeleteVertexArrays(1, &m_boundary_vao);
+	m_sph_vbo[0] = m_sph_vbo[1] = 0;
+	m_dem_vbo[0] = m_dem_vbo[1] = 0;
+	m_sph_ebo = m_dem_ebo = m_boundary_vbo = m_boundary_ebo = 0;
+	m_sph_vao = m_dem_vao = m_boundary_vao = 0;
+	m_sph_cuda_vbo_resource[0] = m_sph_cuda_vbo_resource[1] = nullptr;
+	m_dem_cuda_vbo_resource[0] = m_dem_cuda_vbo_resource[1] = nullptr;
+	m_boundary_cuda_vbo_resource = nullptr;
 
 }
 

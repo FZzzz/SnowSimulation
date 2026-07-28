@@ -69,7 +69,7 @@ void ResourceManager::RemoveObjectFromLast()
 #endif
 }
 
-std::shared_ptr<GameObject> ResourceManager::FindObjByName(const string& name)
+std::shared_ptr<GameObject> ResourceManager::FindObjByName(const std::string& name)
 {
 	for (size_t i = 0; i < m_obj_vec.size(); i++)
 	{

@@ -477,7 +477,7 @@ void Key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 			if(instance->m_b_record)
 				std::cout << "Record start at frame: " + std::to_string(instance->m_frame_count) << std::endl;
 			else
-				std:cout << "Record end at frame: " + std::to_string(instance->m_frame_count) << std::endl;
+				std::cout << "Record end at frame: " + std::to_string(instance->m_frame_count) << std::endl;
 
 			// rest clip index;
 			instance->m_record_clip_index = 0;

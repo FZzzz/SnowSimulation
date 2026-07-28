@@ -1,15 +1,17 @@
-#include "Simulation.h"
-#include "imgui/imgui.h"
-#include "CollisionDetection.h"
-#include "SPHKernel.h"
-#include <iostream>
-#include <cuda_runtime.h>
-#include <cuda_gl_interop.h>
-#include <omp.h>
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
-#include <algorithm>
+#include <iostream>
+#include <omp.h>
+
+#include "CollisionDetection.h"
+#include "imgui/imgui.h"
+#include "Simulation.h"
+#include "SPHKernel.h"
+
 #include "cuda_simulation.cuh"
+#include <cuda_gl_interop.h>
+#include <cuda_runtime.h>
 
 Simulation::Simulation()
 	: m_solver(nullptr), m_particle_system(nullptr), m_neighbor_searcher(nullptr),
@@ -17,15 +19,25 @@ Simulation::Simulation()
 	m_first_frame(true),
 	m_rest_density(0.8f),
 	m_iterations(1),
-	m_clip_length(1000)
+	m_clip_length(1000),
+	m_initial_particle_state{
+		glm::vec3(0.1f, 1.5f, 0.1f),
+		glm::vec3(1.f, 0.125f, 1.f),
+		glm::vec3(0.f, 2.5f, 0.f),
+		glm::vec3(0.f, 0.26f, 0.f),
+		500.f,
+		-50.f,
+		true
+	}
 {
 	m_scene_params.current_time = 0.f;
 }
 
 Simulation::Simulation(SimWorldDesc desc)
-	: m_solver(nullptr), m_particle_system(nullptr), m_neighbor_searcher(nullptr), 
-	m_initialized(false), m_world_desc(desc), m_pause(false)
+	: Simulation()
 {
+	m_world_desc = desc;
+	m_pause = false;
 }
 
 Simulation::~Simulation()
@@ -54,7 +66,7 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_scene_params.solid_start_time = 0.0f;
 	*/
 	
-	
+	/*
 	//plain snow drop
 	glm::vec3 fluid_half_extends = glm::vec3(0.1f, 0.1f, 0.1f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
@@ -66,9 +78,10 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 
 	m_scene_params.fluid_start_time = 10000.0f;
 	m_scene_params.solid_start_time = 0.0f;
-	
+	*/
 
-	/* water drop melt snow 
+	/*
+	// water drop melt snow 
 	glm::vec3 fluid_half_extends = glm::vec3(0.98f, 0.15f, 0.98f);
 	glm::vec3 snow_half_extends = glm::vec3(0.25f, 0.25f, 0.25f);
 	glm::vec3 fluid_origin = glm::vec3(-0.0f, 0.151f, 0.0f); // invisible in this scene
@@ -124,36 +137,27 @@ void Simulation::Initialize(PBD_MODE mode, std::shared_ptr<ParticleSystem> parti
 	m_scene_params.solid_start_time = 0.0f;
 	*/
 
-	/*
-	// water drop
-	glm::vec3 fluid_half_extends = glm::vec3(0.05f, 1.5f, 0.05f);
-	glm::vec3 snow_half_extends = glm::vec3(1.f, 0.125f, 1.f);
-	glm::vec3 fluid_origin = glm::vec3(0.0f, 2.5f, 0.0f);
-	glm::vec3 snow_origin = glm::vec3(0.f, 0.26f, 0.0f);
-
-	const float sph_temperature = 50.f;
-	const float dem_temperature = -50.f;
-
+	
 	m_scene_params.fluid_start_time = 0.0f;
 	m_scene_params.solid_start_time = 0.0f;
-	*/
+	
 
-	m_particle_system->setHottestTemperature(sph_temperature + 0.1f * glm::abs(sph_temperature));
-	m_particle_system->setCoolestTemperature(dem_temperature - 0.1f * glm::abs(dem_temperature));
+	m_particle_system->setHottestTemperature(m_initial_particle_state.fluid_temperature + 0.1f * glm::abs(m_initial_particle_state.fluid_temperature));
+	m_particle_system->setCoolestTemperature(m_initial_particle_state.solid_temperature - 0.1f * glm::abs(m_initial_particle_state.solid_temperature));
 
 	m_neighbor_searcher = std::make_shared<NeighborSearch>(m_particle_system, grid_size);
 	m_solver = std::make_shared<ConstraintSolver>(mode);
 
 	/*Set up parameters*/
 	SetupSimParams();
-	GenerateParticleCube(fluid_half_extends, fluid_origin, 0, true);
-	GenerateParticleCube2(snow_half_extends, snow_origin, 1, false);
+	GenerateParticleCube(m_initial_particle_state.fluid_half_extents, m_initial_particle_state.fluid_origin, 0, m_initial_particle_state.fluid_jitter);
+	GenerateParticleCube(m_initial_particle_state.solid_half_extents, m_initial_particle_state.solid_origin, 1, false);
 
 	m_particle_system->setSPHInitialVelocity(glm::vec3(0.f,0,0));
 	m_particle_system->setDEMInitialVelocity(glm::vec3(0));
 
-	InitializeTemperature(m_particle_system->getSPHParticles()->m_temperature, sph_temperature);
-	InitializeTemperature(m_particle_system->getDEMParticles()->m_temperature, dem_temperature);
+	InitializeTemperature(m_particle_system->getSPHParticles()->m_temperature, m_initial_particle_state.fluid_temperature);
+	InitializeTemperature(m_particle_system->getDEMParticles()->m_temperature, m_initial_particle_state.solid_temperature);
 	AppendParticleSets();
 	InitializeBoundaryParticles();
 
@@ -256,6 +260,7 @@ bool Simulation::StepCUDA(float dt)
 	static bool use_interlink = true;
 	static bool dynamic_connections = false;
 	static float temperature_variation = 0.f;
+	static float heat_transfer_scale = 50.f;
 
 	{
 		ImGui::Begin("Controls");
@@ -270,8 +275,12 @@ bool Simulation::StepCUDA(float dt)
 		ImGui::Checkbox("Enable interlinks", &use_interlink);
 		ImGui::Checkbox("Dynamic connection number", &dynamic_connections);
 		ImGui::SliderFloat("dT", &temperature_variation, -0.01f, 0.01f, "%.3f");
+		ImGui::InputFloat("Heat transfer scale", &heat_transfer_scale, 1.f, 10.f, 1);
+		heat_transfer_scale = glm::max(heat_transfer_scale, 0.f);
 		ImGui::End();
 	}
+
+	DrawInitialParticleControls();
 
 
 	if (m_pause)
@@ -334,7 +343,8 @@ bool Simulation::StepCUDA(float dt)
 		use_interlink,
 		dynamic_connections,
 		cd_on,
-		temperature_variation
+			temperature_variation,
+			heat_transfer_scale
 		);
 
 	t4 = std::chrono::high_resolution_clock::now();
@@ -361,6 +371,62 @@ bool Simulation::StepCUDA(float dt)
 		m_pause = true, count = 0;
 	
 	return true;
+}
+
+void Simulation::DrawInitialParticleControls()
+{
+	ImGui::Begin("Initial Particles");
+	ImGui::InputFloat3("Fluid half extents", &m_initial_particle_state.fluid_half_extents.x, 3);
+	ImGui::InputFloat3("Fluid origin", &m_initial_particle_state.fluid_origin.x, 3);
+	ImGui::InputFloat("Fluid temperature", &m_initial_particle_state.fluid_temperature, 1.f, 10.f, 1);
+	ImGui::Checkbox("Fluid jitter", &m_initial_particle_state.fluid_jitter);
+	ImGui::Separator();
+	ImGui::InputFloat3("Solid half extents", &m_initial_particle_state.solid_half_extents.x, 3);
+	ImGui::InputFloat3("Solid origin", &m_initial_particle_state.solid_origin.x, 3);
+	ImGui::InputFloat("Solid temperature", &m_initial_particle_state.solid_temperature, 1.f, 10.f, 1);
+
+	if (ImGui::Button("Rebuild Initial Particles"))
+		ResetInitialParticles();
+
+	ImGui::End();
+}
+
+void Simulation::ResetInitialParticles()
+{
+	const glm::vec3 minimum_extent(0.01f);
+	m_initial_particle_state.fluid_half_extents = glm::max(m_initial_particle_state.fluid_half_extents, minimum_extent);
+	m_initial_particle_state.solid_half_extents = glm::max(m_initial_particle_state.solid_half_extents, minimum_extent);
+
+	m_pause = true;
+	m_scene_params.current_time = 0.f;
+	m_first_frame = true;
+
+#ifdef _USE_CUDA_
+	cudaDeviceSynchronize();
+	m_neighbor_searcher->Release();
+#endif
+	m_particle_system->Release();
+
+	SetupSimParams();
+	m_particle_system->setHottestTemperature(m_initial_particle_state.fluid_temperature + 0.1f * glm::abs(m_initial_particle_state.fluid_temperature));
+	m_particle_system->setCoolestTemperature(m_initial_particle_state.solid_temperature - 0.1f * glm::abs(m_initial_particle_state.solid_temperature));
+	GenerateParticleCube(m_initial_particle_state.fluid_half_extents, m_initial_particle_state.fluid_origin, 0, m_initial_particle_state.fluid_jitter);
+	GenerateParticleCube(m_initial_particle_state.solid_half_extents, m_initial_particle_state.solid_origin, 1, false);
+	m_particle_system->setSPHInitialVelocity(glm::vec3(0.f));
+	m_particle_system->setDEMInitialVelocity(glm::vec3(0.f));
+	InitializeTemperature(m_particle_system->getSPHParticles()->m_temperature, m_initial_particle_state.fluid_temperature);
+	InitializeTemperature(m_particle_system->getDEMParticles()->m_temperature, m_initial_particle_state.solid_temperature);
+	AppendParticleSets();
+	InitializeBoundaryParticles();
+
+#ifdef _USE_CUDA_
+	m_particle_system->InitializeCUDA();
+	m_neighbor_searcher->InitializeCUDA();
+	InitializeBoundaryCudaData();
+#else
+	m_particle_system->Initialize();
+	m_neighbor_searcher->Initialize();
+#endif
 }
 
 void Simulation::AddCollider(Collider* collider)

@@ -1,3 +1,4 @@
+#pragma once
 #ifndef _CUDA_SIMULATION_CUH_
 #define _CUDA_SIMULATION_CUH_
 
@@ -71,7 +72,8 @@ void snow_simulation(
     bool         use_interlink,
     bool         dynamic_max_connections,
     bool         cd_on,
-    float        temperature_variation
+    float        temperature_variation,
+    float        heat_transfer_scale
 );
 
 #endif
