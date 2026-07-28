@@ -592,10 +592,8 @@ void GLFWApp::Update()
 	float dt = m_currentTime - m_previousTime;
 
 	//const float time_step = 0.0005f;
-#ifdef _USE_CUDA_
+#if _USE_CUDA_
 	m_simulator->StepCUDA(m_time_step);
-#else
-	m_simulator->Step(time_step);
 #endif
 	for (auto it = m_resource_manager->getObjects().begin(); 
 		it != m_resource_manager->getObjects().end(); ++it)
